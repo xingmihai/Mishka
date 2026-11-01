@@ -5,6 +5,7 @@ import top.yukonga.mishka.service.RootTetherHijacker.verifyClean
 import java.net.Inet4Address
 import java.net.Inet6Address
 import java.net.NetworkInterface
+import java.util.concurrent.Executors
 
 /**
  * ROOT 模式下的热点流量处置。
@@ -155,7 +156,7 @@ object RootTetherHijacker {
             Mode.BYPASS -> applyBypass(interfaces)
             Mode.PROXY -> if (tproxySupported) applyTproxy(interfaces) else applyProxyFallback(interfaces)
         }
-        dumpState()
+        dumpStateAsync()
     }
 
     /**
@@ -507,20 +508,34 @@ object RootTetherHijacker {
      */
     private fun tag(label: String): String = "-m comment --comment \"$COMMENT_TAG_PREFIX$label\""
 
+    /** 诊断转储专用串行线程；daemon 以免拖住进程退出。 */
+    private val dumpExecutor = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "mishka-tether-dump").apply { isDaemon = true }
+    }
+
     /**
      * 启动代理后 dump 一次完整路由状态，便于诊断"规则加了但没生效"类问题。
      * 六条查询合并进一次 su：纯诊断输出不值得在启动路径上付 6 次 fork。
+     *
+     * 异步执行：OEM 规则密集的机型（iptables mangle 表自带数十条链）上这一趟实测 5s 以上，
+     * 同步跑会把它整段算进启动耗时，而调用方在它返回前不会推进状态与通知。规则在调用前
+     * 已装完，异步读到的仍是同一份最终状态；查询命令只读，与后续 teardown 抢 xtables.lock
+     * 时由 `-w` 排队，不影响正确性。
      */
-    private fun dumpState() {
-        val script = listOf(
-            "ip rule show (v4)" to "ip rule show",
-            "ip -6 rule show" to "ip -6 rule show",
-            "route table main" to "ip route show table main",
-            "route table $TUN_TABLE" to "ip route show table $TUN_TABLE",
-            "route table $FWMARK_TABLE" to "ip route show table $FWMARK_TABLE",
-            "iptables mangle -S" to "$IPT4 -t mangle -S",
-        ).joinToString("\n") { (label, cmd) -> "echo '$SECTION_MARK$label'; $cmd" }
-        Log.i(TAG, "tether state dump:\n${runWithOutput(script).output}")
+    private fun dumpStateAsync() {
+        dumpExecutor.execute {
+            runCatching {
+                val script = listOf(
+                    "ip rule show (v4)" to "ip rule show",
+                    "ip -6 rule show" to "ip -6 rule show",
+                    "route table main" to "ip route show table main",
+                    "route table $TUN_TABLE" to "ip route show table $TUN_TABLE",
+                    "route table $FWMARK_TABLE" to "ip route show table $FWMARK_TABLE",
+                    "iptables mangle -S" to "$IPT4 -t mangle -S",
+                ).joinToString("\n") { (label, cmd) -> "echo '$SECTION_MARK$label'; $cmd" }
+                Log.i(TAG, "tether state dump:\n${runWithOutput(script).output}")
+            }.onFailure { Log.w(TAG, "tether state dump failed: ${it.message}") }
+        }
     }
 
     private data class ShellResult(val code: Int, val output: String)

@@ -513,6 +513,7 @@ class MishkaRootService : Service() {
         attach: Boolean,
     ): Boolean {
         try {
+            val tetherStartedAt = Clock.System.now().toEpochMilliseconds()
             when (submode) {
                 Submode.Tun -> if (!attach || shouldReapplyOnAttach(storage, RootTetherHijacker::anyRulesPresent)) {
                     if (attach) applyTetherRulesActive(storage, tproxyForTether) else applyTetherRules(storage, tproxyForTether)
@@ -520,13 +521,16 @@ class MishkaRootService : Service() {
 
                 Submode.Tproxy -> applyTproxyRules(storage)
             }
+            Log.i(TAG, "tether rules applied in ${Clock.System.now().toEpochMilliseconds() - tetherStartedAt} ms (submode=$submode)")
             val proxyTether = submode == Submode.Tproxy || RootTetherHijacker.Mode.from(
                 storage.getString(StorageKeys.ROOT_TETHER_MODE, RootTetherHijacker.Mode.BYPASS.storageValue)
             ) == RootTetherHijacker.Mode.PROXY
             val allowedInterfaces = rootTetherInterfaces(storage)
             val interfaces = if (proxyTether) allowedInterfaces else emptyList()
             // DNS hook 必须排在数据转发 hook 前；attach 也重建整套 DNS 规则，不能只检查单个锚点。
+            val dnsStartedAt = Clock.System.now().toEpochMilliseconds()
             RootDnsApplier.apply(applicationInfo.uid, interfaces, allowedInterfaces)
+            Log.i(TAG, "ROOT DNS rules applied in ${Clock.System.now().toEpochMilliseconds() - dnsStartedAt} ms")
             currentCoroutineContext().ensureActive()
             return true
         } catch (e: CancellationException) {

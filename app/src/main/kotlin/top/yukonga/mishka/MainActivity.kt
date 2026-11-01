@@ -34,6 +34,7 @@ import org.koin.android.ext.android.get
 import top.yukonga.mishka.data.api.MihomoConnectionManager
 import top.yukonga.mishka.data.repository.ProfileProcessor
 import top.yukonga.mishka.data.repository.SubscriptionProxyResolver
+import top.yukonga.mishka.domain.sharelink.ShareLinkParser
 import top.yukonga.mishka.platform.AndroidWifiPolicy
 import top.yukonga.mishka.platform.BootStartManager
 import top.yukonga.mishka.platform.FilePicker
@@ -125,6 +126,10 @@ class MainActivity : ComponentActivity() {
                         }
 
                         raw.startsWith("http://") || raw.startsWith("https://") -> raw
+                        // 单节点分享链接（vless/vmess/ss/...）不是订阅地址，但同样是可导入的
+                        // 内容。这里必须放行，否则 AppNavigation 拿到 null、链路导不进去，
+                        // 用户只看到一个「无效订阅」提示
+                        ShareLinkParser.isShareLink(raw) -> raw
                         else -> {
                             showQrToast(R.string.qr_invalid_subscription)
                             null

@@ -25,6 +25,12 @@ sealed interface Route : NavKey {
         val initialIntervalMinutes: Long = 0,
     ) : Route
 
+    /** 单节点分享链接导入。initialLink 由扫码结果预填。 */
+    @Serializable
+    data class SubscriptionAddLink(
+        val initialLink: String = "",
+    ) : Route
+
     @Serializable
     data object Log : Route
 

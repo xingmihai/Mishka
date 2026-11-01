@@ -66,6 +66,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import top.yukonga.mishka.DeepLinkImportRequest
 import top.yukonga.mishka.R
+import top.yukonga.mishka.domain.sharelink.ShareLinkParser
 import top.yukonga.mishka.platform.BootStartManager
 import top.yukonga.mishka.platform.FilePicker
 import top.yukonga.mishka.platform.PlatformStorage
@@ -98,6 +99,7 @@ import top.yukonga.mishka.ui.screen.settings.SettingsScreen
 import top.yukonga.mishka.ui.screen.settings.ThemeSettingsScreen
 import top.yukonga.mishka.ui.screen.settings.VpnSettingsScreen
 import top.yukonga.mishka.ui.screen.settings.WifiPolicyScreen
+import top.yukonga.mishka.ui.screen.subscription.SubscriptionAddLinkScreen
 import top.yukonga.mishka.ui.screen.subscription.SubscriptionAddScreen
 import top.yukonga.mishka.ui.screen.subscription.SubscriptionAddUrlScreen
 import top.yukonga.mishka.ui.screen.subscription.SubscriptionEditScreen
@@ -307,11 +309,20 @@ fun AppNavigation(
                         }
                     },
                     onNavigateUrl = { navigator.push(Route.SubscriptionAddUrl()) },
+                    onNavigateLink = { navigator.push(Route.SubscriptionAddLink()) },
                     onScanQR = if (onScanQR != null) {
                         {
                             onScanQR { url ->
                                 if (url != null) {
-                                    navigator.push(Route.SubscriptionAddUrl(initialUrl = url))
+                                    // 节点分享链接（vless/vmess/ss/...）不是订阅地址，走链接导入页；
+                                    // 其余仍按 URL 订阅处理
+                                    navigator.push(
+                                        if (ShareLinkParser.isShareLink(url)) {
+                                            Route.SubscriptionAddLink(initialLink = url)
+                                        } else {
+                                            Route.SubscriptionAddUrl(initialUrl = url)
+                                        }
+                                    )
                                 }
                             }
                         }
@@ -325,6 +336,16 @@ fun AppNavigation(
                         initialUrl = route.initialUrl,
                         initialName = route.initialName,
                         initialIntervalMinutes = route.initialIntervalMinutes,
+                        onBack = { navigator.pop() },
+                        onSaved = { navigator.popUntil { key -> key is Route.Main } },
+                    )
+                }
+            }
+            entry<Route.SubscriptionAddLink>(swipeDismiss = swipeDismiss) { route ->
+                subscriptionViewModel?.let {
+                    SubscriptionAddLinkScreen(
+                        viewModel = it,
+                        initialLink = route.initialLink,
                         onBack = { navigator.pop() },
                         onSaved = { navigator.popUntil { key -> key is Route.Main } },
                     )

@@ -156,7 +156,9 @@ object RootTetherHijacker {
             Mode.BYPASS -> applyBypass(interfaces)
             Mode.PROXY -> if (tproxySupported) applyTproxy(interfaces) else applyProxyFallback(interfaces)
         }
-        dumpStateAsync(mode)
+        // 诊断转储不在这里触发：它并发跑时会与紧随其后的 ROOT DNS 装配争抢同一把锁，
+        // 实测把 DNS 装配从 1.4s 拖到 7.9s。见 dumpStateAsync 的说明，由
+        // MishkaRootService 在 DNS 装配完成后触发。
     }
 
     /**
@@ -517,14 +519,17 @@ object RootTetherHijacker {
      * 启动代理后 dump 一次路由状态，便于诊断"规则加了但没生效"类问题。
      *
      * 异步执行，且**按模式裁剪查询**：`iptables -t mangle -S` 在 OEM 链密集的机型上要跑数秒，
-     * 期间持有 xtables 锁，与紧随其后的 ROOT DNS 规则装配抢同一把锁——同步跑会把这段算进
-     * 启动耗时，异步跑则会把 DNS 装配从 1s 级拖到 8s 级（实测总启动 7.4s → 8.5s，反而更慢）。
      * BYPASS 只写 ip rule、根本不碰 iptables，该查询对它没有任何诊断价值，直接跳过；
-     * PROXY 才真正写 mangle 表，保留。ip rule / route 查询不碰 xtables 锁，异步跑无副作用。
+     * PROXY 才真正写 mangle 表，保留。
+     *
+     * **不能在规则装配期间并发跑**。`ip rule show` / `ip route show table all` 要持 rtnl
+     * 锁，而 ROOT DNS 装配的 `ip rule add` / `ip route add` 同样要它——并发实测把 DNS 装配
+     * 从 1.4s 拖到 7.9s，比同步跑还慢。故由 MishkaRootService 在 DNS 装配完成后才触发。
      */
-    private fun dumpStateAsync(mode: Mode) {
+    internal fun dumpStateAsync(mode: Mode) {
         dumpExecutor.execute {
             runCatching {
+                val startedAt = System.currentTimeMillis()
                 val queries = buildList {
                     add("ip rule show (v4)" to "ip rule show")
                     add("ip -6 rule show" to "ip -6 rule show")
@@ -536,7 +541,11 @@ object RootTetherHijacker {
                     }
                 }
                 val script = queries.joinToString("\n") { (label, cmd) -> "echo '$SECTION_MARK$label'; $cmd" }
-                Log.i(TAG, "tether state dump:\n${runWithOutput(script).output}")
+                val output = runWithOutput(script).output
+                Log.i(
+                    TAG,
+                    "tether state dump (${System.currentTimeMillis() - startedAt} ms, mode=$mode):\n$output",
+                )
             }.onFailure { Log.w(TAG, "tether state dump failed: ${it.message}") }
         }
     }

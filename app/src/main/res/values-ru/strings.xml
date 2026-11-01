@@ -213,6 +213,12 @@
     <string name="subscription_file_summary">Импорт из файла</string>
     <string name="subscription_url">URL</string>
     <string name="subscription_url_summary">Импорт по ссылке</string>
+    <string name="subscription_link">Ссылка</string>
+    <string name="subscription_link_summary">Импорт одной ссылки на узел</string>
+    <string name="subscription_link_hint">Поддерживаются только ссылки на узлы: %1$s</string>
+    <string name="subscription_link_label">Ссылка на узел</string>
+    <string name="subscription_link_placeholder">vless://…, vmess://…, ss://…</string>
+    <string name="subscription_link_name_placeholder">Оставьте пустым, чтобы использовать имя из ссылки</string>
     <string name="subscription_qr">QR-код</string>
     <string name="subscription_qr_summary">Сканировать QR-код для импорта</string>
     <string name="subscription_url_hint">Поддерживаются только файлы конфигурации mihomo (с прокси/правилами)</string>
@@ -238,6 +244,7 @@
 
     <!-- Subscription import errors -->
     <string name="error_import_failed">Ошибка импорта: %1$s</string>
+    <string name="error_share_link_parse">Не удалось разобрать ссылку: %1$s</string>
     <string name="error_update_failed">Ошибка обновления: %1$s</string>
     <string name="error_save_failed">Ошибка сохранения: %1$s</string>
     <string name="error_validation_failed">Ошибка проверки: %1$s</string>

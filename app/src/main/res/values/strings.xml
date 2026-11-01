@@ -215,6 +215,12 @@
     <string name="subscription_file_summary">Import from file</string>
     <string name="subscription_url">URL</string>
     <string name="subscription_url_summary">Import from URL</string>
+    <string name="subscription_link">Link</string>
+    <string name="subscription_link_summary">Import a single node link</string>
+    <string name="subscription_link_hint">Only accepts node share links: %1$s</string>
+    <string name="subscription_link_label">Node link</string>
+    <string name="subscription_link_placeholder">vless://…, vmess://…, ss://…</string>
+    <string name="subscription_link_name_placeholder">Leave blank to use the link remark</string>
     <string name="subscription_qr">QR Code</string>
     <string name="subscription_qr_summary">Scan QR code to import</string>
     <string name="subscription_url_hint">Only accepts mihomo config files (with proxies/rules)</string>
@@ -240,6 +246,7 @@
 
     <!-- Subscription import errors -->
     <string name="error_import_failed">Import failed: %1$s</string>
+    <string name="error_share_link_parse">Cannot parse link: %1$s</string>
     <string name="error_update_failed">Update failed: %1$s</string>
     <string name="error_save_failed">Save failed: %1$s</string>
     <string name="error_validation_failed">Validation failed: %1$s</string>

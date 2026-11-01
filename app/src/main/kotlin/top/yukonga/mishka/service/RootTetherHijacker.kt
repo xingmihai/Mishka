@@ -156,7 +156,7 @@ object RootTetherHijacker {
             Mode.BYPASS -> applyBypass(interfaces)
             Mode.PROXY -> if (tproxySupported) applyTproxy(interfaces) else applyProxyFallback(interfaces)
         }
-        dumpStateAsync()
+        dumpStateAsync(mode)
     }
 
     /**
@@ -514,25 +514,28 @@ object RootTetherHijacker {
     }
 
     /**
-     * 启动代理后 dump 一次完整路由状态，便于诊断"规则加了但没生效"类问题。
-     * 六条查询合并进一次 su：纯诊断输出不值得在启动路径上付 6 次 fork。
+     * 启动代理后 dump 一次路由状态，便于诊断"规则加了但没生效"类问题。
      *
-     * 异步执行：OEM 规则密集的机型（iptables mangle 表自带数十条链）上这一趟实测 5s 以上，
-     * 同步跑会把它整段算进启动耗时，而调用方在它返回前不会推进状态与通知。规则在调用前
-     * 已装完，异步读到的仍是同一份最终状态；查询命令只读，与后续 teardown 抢 xtables.lock
-     * 时由 `-w` 排队，不影响正确性。
+     * 异步执行，且**按模式裁剪查询**：`iptables -t mangle -S` 在 OEM 链密集的机型上要跑数秒，
+     * 期间持有 xtables 锁，与紧随其后的 ROOT DNS 规则装配抢同一把锁——同步跑会把这段算进
+     * 启动耗时，异步跑则会把 DNS 装配从 1s 级拖到 8s 级（实测总启动 7.4s → 8.5s，反而更慢）。
+     * BYPASS 只写 ip rule、根本不碰 iptables，该查询对它没有任何诊断价值，直接跳过；
+     * PROXY 才真正写 mangle 表，保留。ip rule / route 查询不碰 xtables 锁，异步跑无副作用。
      */
-    private fun dumpStateAsync() {
+    private fun dumpStateAsync(mode: Mode) {
         dumpExecutor.execute {
             runCatching {
-                val script = listOf(
-                    "ip rule show (v4)" to "ip rule show",
-                    "ip -6 rule show" to "ip -6 rule show",
-                    "route table main" to "ip route show table main",
-                    "route table $TUN_TABLE" to "ip route show table $TUN_TABLE",
-                    "route table $FWMARK_TABLE" to "ip route show table $FWMARK_TABLE",
-                    "iptables mangle -S" to "$IPT4 -t mangle -S",
-                ).joinToString("\n") { (label, cmd) -> "echo '$SECTION_MARK$label'; $cmd" }
+                val queries = buildList {
+                    add("ip rule show (v4)" to "ip rule show")
+                    add("ip -6 rule show" to "ip -6 rule show")
+                    add("route table main" to "ip route show table main")
+                    add("route table $TUN_TABLE" to "ip route show table $TUN_TABLE")
+                    add("route table $FWMARK_TABLE" to "ip route show table $FWMARK_TABLE")
+                    if (mode == Mode.PROXY) {
+                        add("iptables mangle -S" to "$IPT4 -t mangle -S")
+                    }
+                }
+                val script = queries.joinToString("\n") { (label, cmd) -> "echo '$SECTION_MARK$label'; $cmd" }
                 Log.i(TAG, "tether state dump:\n${runWithOutput(script).output}")
             }.onFailure { Log.w(TAG, "tether state dump failed: ${it.message}") }
         }

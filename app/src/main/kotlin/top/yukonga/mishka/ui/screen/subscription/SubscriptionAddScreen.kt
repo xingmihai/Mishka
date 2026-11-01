@@ -49,6 +49,7 @@ fun SubscriptionAddScreen(
     onBack: () -> Unit = {},
     onPickFile: () -> Unit = {},
     onNavigateUrl: () -> Unit = {},
+    onNavigateLink: () -> Unit = {},
     onScanQR: (() -> Unit)? = null,
 ) {
     val scrollBehavior = MiuixScrollBehavior()
@@ -113,6 +114,12 @@ fun SubscriptionAddScreen(
                         summary = stringResource(R.string.subscription_url_summary),
                         enabled = !uiState.isLoading,
                         onClick = onNavigateUrl,
+                    )
+                    ArrowPreference(
+                        title = stringResource(R.string.subscription_link),
+                        summary = stringResource(R.string.subscription_link_summary),
+                        enabled = !uiState.isLoading,
+                        onClick = onNavigateLink,
                     )
                     if (onScanQR != null) {
                         ArrowPreference(

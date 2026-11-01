@@ -272,7 +272,7 @@ class MishkaRootService : Service() {
                     // 代理此刻即可用。后面的规则装配要跑上百条 iptables，耗时可达十秒级；等它
                     // 完成再换通知，通知栏会长时间停在「启动中」。bridge 状态仍等装配完成后再
                     // 发布，避免 restartWhenReady 在装配期间把过渡态误判为可重启。
-                    dynamicNotification.startOrFallbackStatic(storage, tunMode)
+                    postRunningNotificationEarly(storage, tunMode)
                     if (!applyRootRules(storage, submode, tproxySupported, attach = true)) return@launch
                     ProxyServiceBridge.updateState(
                         ProxyServiceStatus(
@@ -478,7 +478,7 @@ class MishkaRootService : Service() {
             // 会长时间停在「启动中」（磁贴/通知入口尤其明显，此时没有界面告诉用户核心已就绪）。
             // 只提前通知、不提前 bridge 状态：状态仍等装配完成后发布，避免 restartWhenReady
             // 在装配期间把过渡态误判为可重启而与本次启动协程并发。
-            dynamicNotification.startOrFallbackStatic(storage, tunMode)
+            postRunningNotificationEarly(storage, tunMode)
 
             val rulesStartedAt = Clock.System.now().toEpochMilliseconds()
             if (!applyRootRules(storage, submode, tproxyForTether, attach = false)) return@launch
@@ -545,6 +545,24 @@ class MishkaRootService : Service() {
         storage.getString(StorageKeys.ROOT_TETHER_IFACES, RootTetherHijacker.DEFAULT_IFACES)
     )
 
+    /**
+     * 提前把通知切到「运行中」。
+     *
+     * 发布失败**不能**中断启动：此刻 mihomo 已就绪，让异常往外抛会把 bridge 停在 Starting，
+     * 而 mihomo 继续在没有 ROOT 规则的情况下运行——用户既看到卡在「启动中」，流量也没走
+     * ROOT 路由。通知只是展示，真正决定代理是否可用的是后面的规则装配；它失败时由
+     * [failRootRouting] 收尾。CancellationException 必须原样抛出，不能被当成发布失败吞掉。
+     */
+    private fun postRunningNotificationEarly(storage: PlatformStorage, tunMode: TunMode) {
+        try {
+            dynamicNotification.startOrFallbackStatic(storage, tunMode)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to post running notification, continuing ROOT startup", e)
+        }
+    }
+
     private suspend fun failRootRouting(storage: PlatformStorage, tunMode: TunMode, error: Exception) {
         Log.e(TAG, "Failed to install ROOT routing", error)
         withContext(NonCancellable) {
@@ -557,6 +575,11 @@ class MishkaRootService : Service() {
             }
             clearPersistedState(storage)
             storage.putString(StorageKeys.SERVICE_WAS_RUNNING, "false")
+            // 通知可能已在装配前切到「运行中」（见 postRunningNotificationEarly）。规则装不上、
+            // mihomo 也已在上面停止，再留着它就是假报 Running——root-mode.md 要求内核/路由
+            // 能力缺失时不得继续报 Running。
+            dynamicNotification.stop()
+            stopForeground(STOP_FOREGROUND_REMOVE)
             ProxyServiceBridge.updateState(
                 ProxyServiceStatus(
                     ProxyState.Error,

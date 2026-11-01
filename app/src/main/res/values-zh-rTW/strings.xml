@@ -213,6 +213,12 @@
     <string name="subscription_file_summary">從檔案匯入</string>
     <string name="subscription_url">URL</string>
     <string name="subscription_url_summary">從 URL 匯入</string>
+    <string name="subscription_link">連結</string>
+    <string name="subscription_link_summary">匯入單一節點連結</string>
+    <string name="subscription_link_hint">僅支援節點分享連結：%1$s</string>
+    <string name="subscription_link_label">節點連結</string>
+    <string name="subscription_link_placeholder">vless://…、vmess://…、ss://…</string>
+    <string name="subscription_link_name_placeholder">留空則使用連結備註</string>
     <string name="subscription_qr">QR Code</string>
     <string name="subscription_qr_summary">掃描 QR Code 匯入</string>
     <string name="subscription_url_hint">僅接受 mihomo 設定檔（包含代理／規則）</string>
@@ -238,6 +244,7 @@
 
     <!-- Subscription import errors -->
     <string name="error_import_failed">匯入失敗: %1$s</string>
+    <string name="error_share_link_parse">無法解析連結：%1$s</string>
     <string name="error_update_failed">更新失敗: %1$s</string>
     <string name="error_save_failed">儲存失敗: %1$s</string>
     <string name="error_validation_failed">設定檔驗證失敗: %1$s</string>

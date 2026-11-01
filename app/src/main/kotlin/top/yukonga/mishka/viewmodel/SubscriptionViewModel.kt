@@ -21,6 +21,8 @@ import top.yukonga.mishka.data.repository.ProfileProcessor
 import top.yukonga.mishka.domain.model.ProfileType
 import top.yukonga.mishka.domain.model.Subscription
 import top.yukonga.mishka.domain.repository.SubscriptionRepository
+import top.yukonga.mishka.domain.sharelink.ShareLinkException
+import top.yukonga.mishka.domain.sharelink.ShareLinkParser
 import top.yukonga.mishka.platform.ProfileFileManager
 import top.yukonga.mishka.platform.ProxyServiceController
 import top.yukonga.mishka.util.describe
@@ -134,6 +136,27 @@ class SubscriptionViewModel(
             val sub = repository.create(ProfileType.File, name, "")
             pendingOnFailure(sub.id) {
                 fileManager.savePendingConfig(sub.id, content)
+                processor.apply(sub.id, ::reportProgress)
+            }
+            onComplete()
+        }
+    }
+
+    /**
+     * 单节点分享链接导入：解析成 mihomo 配置后走与文件导入相同的管线。
+     *
+     * 解析与建档都在 runPipeline 内：解析失败会抛 [ShareLinkException]，由 localizedMessage
+     * 映射成本地化文案，且不创建 Pending、不留 DB / 文件残留。
+     */
+    fun addFromLink(name: String, link: String, onComplete: () -> Unit = {}) {
+        runPipeline(ProfileOperation.Import, errorKey = R.string.error_import_failed) {
+            // 先解析再建 Pending：链接不合法时不留任何 DB / 文件残留
+            val proxy = ShareLinkParser.parse(link)
+            val resolvedName = name.trim().ifEmpty { proxy.name }
+            val config = ShareLinkParser.toConfig(ShareLinkParser.renamed(proxy, resolvedName))
+            val sub = repository.create(ProfileType.File, resolvedName, "")
+            pendingOnFailure(sub.id) {
+                fileManager.savePendingConfig(sub.id, config)
                 processor.apply(sub.id, ::reportProgress)
             }
             onComplete()
@@ -317,6 +340,8 @@ class SubscriptionViewModel(
         is ImportError.InvalidScheme -> context.getString(R.string.error_import_invalid_scheme, e.source)
         is ImportError.InvalidName -> context.getString(R.string.error_import_invalid_name)
         is ImportError.IntervalTooSmall -> context.getString(R.string.error_import_interval_too_small)
+        // 分享链接解析失败：message 是英文技术描述（如 "vless: missing uuid"），配合本地化前缀展示
+        is ShareLinkException -> context.getString(R.string.error_share_link_parse, e.message ?: "")
         // HttpStatus 本身就是 "HTTP 404 Not Found" 这类技术串，无可本地化的部分
         else -> e.describe()
     }

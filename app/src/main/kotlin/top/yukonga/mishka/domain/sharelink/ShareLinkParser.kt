@@ -1,6 +1,5 @@
 package top.yukonga.mishka.domain.sharelink
 
-import java.net.URLDecoder
 import java.util.Base64
 
 /**
@@ -70,17 +69,21 @@ object ShareLinkParser {
      * 单节点没有规则可言，不写 rules 会让 mihomo 拿不到任何出站，必须有这一条。
      */
     fun toConfig(proxy: ParsedProxy): String = buildString {
+        // 节点名与组名不能重名：链接备注就叫 "PROXY" 时，select 组与 proxy 同名会让
+        // mihomo 无法解析 MATCH 的引用而拒绝整份配置。组名加后缀直到互不冲突
+        var group = "PROXY"
+        while (group == proxy.name) group += "_"
         append("proxies:\n")
         appendProxyEntry(proxy.fields, this)
         append('\n')
         append("proxy-groups:\n")
-        append("  - name: PROXY\n")
+        append("  - name: ").append(scalar(group)).append('\n')
         append("    type: select\n")
         append("    proxies:\n")
         append("      - ").append(scalar(proxy.name)).append('\n')
         append('\n')
         append("rules:\n")
-        append("  - MATCH,PROXY\n")
+        append("  - MATCH,").append(scalar(group)).append('\n')
     }
 
     // ========== VLESS ==========
@@ -92,7 +95,7 @@ object ShareLinkParser {
         // userinfo 之后可能还有 ?query，host:port 在 @ 与 ? 之间
         val authority = body.substringAfter("@", "").substringBefore("?")
         if (authority.isEmpty()) throw ShareLinkException("vless: missing server address")
-        val uuid = body.substringBefore("@", "").urlDecode()
+        val uuid = body.substringBefore("@", "").percentDecode()
         if (uuid.isEmpty()) throw ShareLinkException("vless: missing uuid")
         val (host, port) = splitHostPort(authority)
 
@@ -162,15 +165,18 @@ object ShareLinkParser {
             f["tls"] = true
             val sni = map["sni"]?.takeIf { it.isNotEmpty() } ?: map["host"]?.takeIf { it.isNotEmpty() }
             if (!sni.isNullOrEmpty()) f["servername"] = sni
+            // vmess 的 allowInsecure 独立于 tls 字段；不映射会在自签证书上直接握手失败
+            if (map["allowInsecure"] == "true" || map["allowInsecure"] == "1") {
+                f["skip-cert-verify"] = true
+            }
         }
         if (!map["sni"].isNullOrEmpty() && !tls) f["servername"] = map["sni"]
         if (!map["fp"].isNullOrEmpty()) f["client-fingerprint"] = map["fp"]
         alpnList(map["alpn"])?.let { f["alpn"] = it }
         when (net) {
+            // ws 复用公共 wsOpts：vmess 的 path 同样可能带 ?ed= 早期数据
             "ws" -> {
-                val opts = LinkedHashMap<String, Any?>()
-                map["path"]?.takeIf { it.isNotEmpty() }?.let { opts["path"] = it }
-                map["host"]?.takeIf { it.isNotEmpty() }?.let { opts["headers"] = mapOf("Host" to it) }
+                val opts = wsOpts(map["path"], map["host"])
                 if (opts.isNotEmpty()) f["ws-opts"] = opts
             }
 
@@ -184,6 +190,14 @@ object ShareLinkParser {
             "grpc" -> {
                 val serviceName = map["path"]?.takeIf { it.isNotEmpty() }
                 if (serviceName != null) f["grpc-opts"] = mapOf("grpc-service-name" to serviceName)
+            }
+
+            "http" -> {
+                val opts = LinkedHashMap<String, Any?>()
+                // 与 vless/trojan 一致：http-opts.path 是列表
+                map["path"]?.takeIf { it.isNotEmpty() }?.let { opts["path"] = listOf(it) }
+                map["host"]?.takeIf { it.isNotEmpty() }?.let { opts["headers"] = mapOf("Host" to listOf(it)) }
+                if (opts.isNotEmpty()) f["http-opts"] = opts
             }
         }
         return ParsedProxy(f["name"] as String, f)
@@ -248,9 +262,11 @@ object ShareLinkParser {
             f["plugin"] = normalized
             val opts = LinkedHashMap<String, Any?>()
             for (part in parts.drop(1)) {
-                val k = part.substringBefore("=")
-                val v = part.substringAfter("=", "")
-                if (k.isEmpty() || v.isEmpty()) continue
+                val separator = part.indexOf('=')
+                // 裸开关（如 v2ray-plugin 的 ";tls"）没有 =，等价于开启该选项，不能跳过
+                val k = if (separator >= 0) part.substring(0, separator) else part
+                val v = if (separator >= 0) part.substring(separator + 1) else "true"
+                if (k.isEmpty()) continue
                 opts[when (k) {
                     "obfs" -> "mode"
                     "obfs-host" -> "host"
@@ -270,7 +286,7 @@ object ShareLinkParser {
         val body = link.substringAfter("://").substringBefore("#")
         val query = queryOf(body)
         val authority = body.substringAfter("@", "").substringBefore("?")
-        val password = body.substringBefore("@", "").urlDecode()
+        val password = body.substringBefore("@", "").percentDecode()
         if (password.isEmpty()) throw ShareLinkException("trojan: missing password")
         if (authority.isEmpty()) throw ShareLinkException("trojan: missing server address")
         val (host, port) = splitHostPort(authority)
@@ -300,7 +316,7 @@ object ShareLinkParser {
         val body = link.substringAfter("://").substringBefore("#")
         val query = queryOf(body)
         val authority = body.substringAfter("@", "").substringBefore("?")
-        val password = body.substringBefore("@", "").urlDecode()
+        val password = body.substringBefore("@", "").percentDecode()
         if (password.isEmpty()) throw ShareLinkException("hysteria2: missing password")
         if (authority.isEmpty()) throw ShareLinkException("hysteria2: missing server address")
         val (host, port) = splitHostPort(authority)
@@ -329,7 +345,7 @@ object ShareLinkParser {
         val body = link.substringAfter("://").substringBefore("#")
         val query = queryOf(body)
         val authority = body.substringAfter("@", "").substringBefore("?")
-        val userinfo = body.substringBefore("@", "").urlDecode()
+        val userinfo = body.substringBefore("@", "").percentDecode()
         if (authority.isEmpty()) throw ShareLinkException("tuic: missing server address")
         val uuid = userinfo.substringBefore(":", "")
         val password = userinfo.substringAfter(":", "")
@@ -363,7 +379,7 @@ object ShareLinkParser {
         val body = link.substringAfter("://").substringBefore("#")
         val query = queryOf(body)
         val authority = body.substringAfter("@", "").substringBefore("?")
-        val password = body.substringBefore("@", "").urlDecode()
+        val password = body.substringBefore("@", "").percentDecode()
         if (password.isEmpty()) throw ShareLinkException("anytls: missing password")
         if (authority.isEmpty()) throw ShareLinkException("anytls: missing server address")
         val (host, port) = splitHostPort(authority)
@@ -394,16 +410,7 @@ object ShareLinkParser {
         val serviceName = query["serviceName"]
         return when (network) {
             "ws" -> {
-                val opts = LinkedHashMap<String, Any?>()
-                val cleanPath = path?.substringBefore("?")
-                cleanPath?.takeIf { it.isNotEmpty() }?.let { opts["path"] = it }
-                host?.takeIf { it.isNotEmpty() }?.let { opts["headers"] = mapOf("Host" to it) }
-                // path 里的 ?ed=2048 是早期数据长度
-                val ed = path?.substringAfter("?ed=", "")?.takeIf { it.isNotEmpty() }?.toIntOrNull()
-                if (ed != null) {
-                    opts["max-early-data"] = ed
-                    opts["early-data-header-name"] = "Sec-WebSocket-Protocol"
-                }
+                val opts = wsOpts(path, host)
                 if (opts.isEmpty()) null else LinkedHashMap<String, Any?>().apply { put("ws-opts", opts) }
             }
 
@@ -422,13 +429,33 @@ object ShareLinkParser {
 
             "http" -> {
                 val opts = LinkedHashMap<String, Any?>()
-                path?.takeIf { it.isNotEmpty() }?.let { opts["path"] = it }
+                // mihomo 的 http-opts.path 是字符串列表，写成单字符串会校验失败
+                path?.takeIf { it.isNotEmpty() }?.let { opts["path"] = listOf(it) }
                 host?.takeIf { it.isNotEmpty() }?.let { opts["headers"] = mapOf("Host" to listOf(it)) }
                 if (opts.isEmpty()) null else LinkedHashMap<String, Any?>().apply { put("http-opts", opts) }
             }
 
             else -> null
         }
+    }
+
+    /**
+     * ws 传输参数，vless/trojan 与 vmess 共用。
+     *
+     * path 里的 `?ed=2048` 是早期数据长度（v2rayN / 多数订阅生成器都这么写），必须剥出来
+     * 写成 mihomo 的 max-early-data，否则 path 带着 `?ed=` 一起发出去，握手直接失败。
+     */
+    private fun wsOpts(path: String?, host: String?): LinkedHashMap<String, Any?> {
+        val opts = LinkedHashMap<String, Any?>()
+        val cleanPath = path?.substringBefore("?")
+        cleanPath?.takeIf { it.isNotEmpty() }?.let { opts["path"] = it }
+        host?.takeIf { it.isNotEmpty() }?.let { opts["headers"] = mapOf("Host" to it) }
+        val ed = path?.substringAfter("?ed=", "")?.takeIf { it.isNotEmpty() }?.toIntOrNull()
+        if (ed != null) {
+            opts["max-early-data"] = ed
+            opts["early-data-header-name"] = "Sec-WebSocket-Protocol"
+        }
+        return opts
     }
 
     private fun alpnList(value: String?): List<String>? {
@@ -439,9 +466,12 @@ object ShareLinkParser {
     // ========== 工具 ==========
 
     private fun splitHostPort(authority: String): Pair<String, Int> {
-        val cleaned = authority.substringAfter("[").let {
+        // 形如 host:443/path 的链接（部分生成器会带 path，ws 的 path 也可能写在这里），
+        // 路径不属于 authority，混进来会让端口解析成 "443/" 而整个导入失败
+        val authorityWithoutPath = authority.substringBefore("/")
+        val cleaned = authorityWithoutPath.substringAfter("[").let {
             // IPv6 字面量：[::1]:443
-            if (authority.startsWith("[")) it.substringBefore("]") else authority
+            if (authorityWithoutPath.startsWith("[")) it.substringBefore("]") else authorityWithoutPath
         }
         val host = if (authority.startsWith("[")) cleaned else authority.substringBeforeLast(":")
         val portRaw = authority.substringAfterLast(":")
@@ -452,7 +482,7 @@ object ShareLinkParser {
     }
 
     private fun fragmentOf(link: String): String =
-        link.substringAfter("#", "").urlDecode().trim()
+        link.substringAfter("#", "").percentDecode().trim()
 
     private fun queryOf(body: String): Map<String, String> {
         val raw = body.substringAfter("?", "").takeIf { it.isNotEmpty() } ?: return emptyMap()
@@ -462,7 +492,7 @@ object ShareLinkParser {
             val k = pair.substringBefore("=")
             val v = pair.substringAfter("=", "")
             if (k.isEmpty()) return@forEach
-            map[k.urlDecode()] = v.urlDecode()
+            map[k.percentDecode()] = v.percentDecode()
         }
         return map
     }
@@ -470,13 +500,83 @@ object ShareLinkParser {
     private fun splitAndTrim(value: String): List<String> =
         value.split(",").map { it.trim() }.filter { it.isNotEmpty() }
 
-    private fun String.urlDecode(): String =
-        runCatching { URLDecoder.decode(this, "UTF-8") }.getOrDefault(this)
+    /**
+     * 百分号解码。**不能用 URLDecoder.decode**：那是 form 风格，会把字面 `+` 解成空格，
+     * 而分享链接里的凭据（trojan/hy2/anytls 的 password、vless 的 uuid）常含 `+`，
+     * 一解码就坏、节点连不上。这里只做 %XX，字面 `+` 原样保留。
+     *
+     * 非法转义（如裸 `%`）原样保留而不是报错：导入器对边角链接宽容一点，让用户能先
+     * 导入再由 mihomo 校验，比直接拒绝更好定位问题。
+     */
+    private fun String.percentDecode(): String {
+        if (indexOf('%') < 0) return this
+        val out = StringBuilder(length)
+        var i = 0
+        while (i < length) {
+            val c = this[i]
+            // 需要 i+1、i+2 两个字符都在界内
+            if (c == '%' && i + 2 < length) {
+                val hex = substring(i + 1, i + 3)
+                val value = hex.toIntOrNull(16)
+                if (value != null) {
+                    out.append(value.toChar())
+                    i += 3
+                    continue
+                }
+            }
+            out.append(c)
+            i++
+        }
+        return out.toString()
+    }
 
     private fun decodeBase64(value: String): ByteArray {
         var text = value.trim().replace('-', '+').replace('_', '/')
         while (text.length % 4 != 0) text += "="
         return Base64.getDecoder().decode(text)
+    }
+
+    /**
+     * JSON 字符串反转义。逐字符处理而不是链式 replace：链式 replace 会把 `\\n` 之类
+     * 二次转义的顺序弄错，也会漏掉 `\uXXXX`（备注里带非 ASCII 时很常见），留下字面
+     * 的反斜杠-u 文本让节点备注变成乱码。
+     */
+    private fun unescapeJson(value: String): String {
+        val sb = StringBuilder(value.length)
+        var i = 0
+        while (i < value.length) {
+            val c = value[i]
+            if (c != '\\' || i + 1 >= value.length) {
+                sb.append(c)
+                i++
+                continue
+            }
+            when (val esc = value[i + 1]) {
+                '"' -> { sb.append('"'); i += 2 }
+                '\\' -> { sb.append('\\'); i += 2 }
+                '/' -> { sb.append('/'); i += 2 }
+                'b' -> { sb.append('\u0008'); i += 2 }
+                'f' -> { sb.append('\u000C'); i += 2 }
+                'n' -> { sb.append('\n'); i += 2 }
+                'r' -> { sb.append('\r'); i += 2 }
+                't' -> { sb.append('\t'); i += 2 }
+                'u' -> {
+                    val hex = value.substring(i + 2, (i + 6).coerceAtMost(value.length))
+                    val code = hex.toIntOrNull(16)
+                    if (hex.length == 4 && code != null) {
+                        sb.append(code.toChar())
+                        i += 6
+                    } else {
+                        // 非法 \u 转义：保留原样，交给 mihomo 校验时暴露
+                        sb.append(c)
+                        i++
+                    }
+                }
+
+                else -> { sb.append(esc); i += 2 }
+            }
+        }
+        return sb.toString()
     }
 
     /** vmess 的 base64 里是一段 JSON；这里只做够用的解析，不引序列化框架。 */
@@ -492,10 +592,9 @@ object ShareLinkParser {
             val key = m.groupValues[1]
             var value = m.groupValues[2].trim()
             if (value.startsWith("\"") && value.endsWith("\"")) {
-                value = value.substring(1, value.length - 1)
-                    .replace("\\\"", "\"")
-                    .replace("\\\\", "\\")
-                    .replace("\\/", "/")
+                value = unescapeJson(
+                    value.substring(1, value.length - 1)
+                )
             }
             map[key] = value
         }
@@ -588,15 +687,37 @@ object ShareLinkParser {
             else -> value.toString()
         }
         if (!needsQuote(text)) return text
-        return "\"" + text.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+        return "\"" + text.escapeYaml() + "\""
+    }
+
+    /** 双引号标量内的转义：反斜杠、双引号、控制字符都必须转，否则值被改变或 YAML 直接报错。 */
+    private fun String.escapeYaml(): String {
+        val sb = StringBuilder(length)
+        for (c in this) {
+            when (c) {
+                '\\' -> sb.append("\\\\")
+                '"' -> sb.append("\\\"")
+                '\n' -> sb.append("\\n")
+                '\r' -> sb.append("\\r")
+                '\t' -> sb.append("\\t")
+                else -> if (c < ' ') sb.append("\\x").append(c.code.toString(16).padStart(2, '0'))
+                else sb.append(c)
+            }
+        }
+        return sb.toString()
     }
 
     private fun needsQuote(text: String): Boolean {
         if (text.isEmpty()) return true
         if (text != text.trim()) return true
-        if (text.toLongOrNull() != null) return true
-        if (text in setOf("true", "false", "null", "~", "yes", "no", "on", "off", "y", "n")) return true
+        // 整数、小数、指数形态都会被 YAML 读成数字（"1.5" / "1e5" 同样中招）
+        if (text.toLongOrNull() != null || text.toDoubleOrNull() != null) return true
+        // YAML 1.1 的布尔写法是大小写无关的，TRUE / True 一样会被读成布尔
+        if (text.lowercase() in setOf(
+                "true", "false", "null", "~", "yes", "no", "on", "off", "y", "n"
+            )
+        ) return true
         if (text.startsWith("-") || text.startsWith("?") || text.startsWith(":")) return true
-        return text.any { it in ":#{}[]&*!|>'\"%@`,\n\t" }
+        return text.any { it in ":#{}[]&*!|>'\"%@`,\n\t\r" }
     }
 }

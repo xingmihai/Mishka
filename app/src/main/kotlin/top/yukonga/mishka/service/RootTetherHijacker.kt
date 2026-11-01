@@ -156,9 +156,8 @@ object RootTetherHijacker {
             Mode.BYPASS -> applyBypass(interfaces)
             Mode.PROXY -> if (tproxySupported) applyTproxy(interfaces) else applyProxyFallback(interfaces)
         }
-        // 诊断转储不在这里触发：它并发跑时会与紧随其后的 ROOT DNS 装配争抢同一把锁，
-        // 实测把 DNS 装配从 1.4s 拖到 7.9s。见 dumpStateAsync 的说明，由
-        // MishkaRootService 在 DNS 装配完成后触发。
+        // 诊断转储不在这里触发：纯诊断输出不该挡在启动路径上，见 dumpStateAsync 的说明，
+        // 由 MishkaRootService 在 DNS 装配完成后触发。
     }
 
     /**
@@ -518,13 +517,14 @@ object RootTetherHijacker {
     /**
      * 启动代理后 dump 一次路由状态，便于诊断"规则加了但没生效"类问题。
      *
-     * 异步执行，且**按模式裁剪查询**：`iptables -t mangle -S` 在 OEM 链密集的机型上要跑数秒，
-     * BYPASS 只写 ip rule、根本不碰 iptables，该查询对它没有任何诊断价值，直接跳过；
-     * PROXY 才真正写 mangle 表，保留。
+     * 异步执行，且**按模式裁剪查询**：`iptables -t mangle -S` 在 OEM 链密集的机型上要跑数秒
+     * （实测 5.6s，去掉后整套 dump 101ms）。BYPASS 只写 ip rule、根本不碰 iptables，该查询
+     * 对它没有任何诊断价值，直接跳过；PROXY 才真正写 mangle 表，保留。
      *
-     * **不能在规则装配期间并发跑**。`ip rule show` / `ip route show table all` 要持 rtnl
-     * 锁，而 ROOT DNS 装配的 `ip rule add` / `ip route add` 同样要它——并发实测把 DNS 装配
-     * 从 1.4s 拖到 7.9s，比同步跑还慢。故由 MishkaRootService 在 DNS 装配完成后才触发。
+     * 由 MishkaRootService 在 ROOT DNS 装配完成后触发，不放在 apply() 里：纯诊断输出不该挡在
+     * 启动路径上。注意**它没有参与 DNS 装配的耗时**——三次实测 DNS 装配分别为 1.4s / 8.0s /
+     * 9.1s，最后一次 dump 已完全排在其后，慢的是 DNS 脚本自身与设备上的锁争用，别再把账算
+     * 到 dump 头上。
      */
     internal fun dumpStateAsync(mode: Mode) {
         dumpExecutor.execute {

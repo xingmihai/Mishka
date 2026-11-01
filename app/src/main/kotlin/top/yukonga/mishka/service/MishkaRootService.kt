@@ -531,6 +531,15 @@ class MishkaRootService : Service() {
             val dnsStartedAt = Clock.System.now().toEpochMilliseconds()
             RootDnsApplier.apply(applicationInfo.uid, interfaces, allowedInterfaces)
             Log.i(TAG, "ROOT DNS rules applied in ${Clock.System.now().toEpochMilliseconds() - dnsStartedAt} ms")
+            // 诊断转储排在 DNS 装配之后：它的 ip rule / route 查询与装配争抢 rtnl 锁，并发跑会把
+            // DNS 从 1.4s 拖到 7.9s。此时规则已全部就位，读到的仍是同一份最终状态。
+            if (submode == Submode.Tun) {
+                RootTetherHijacker.dumpStateAsync(
+                    RootTetherHijacker.Mode.from(
+                        storage.getString(StorageKeys.ROOT_TETHER_MODE, RootTetherHijacker.Mode.BYPASS.storageValue)
+                    )
+                )
+            }
             currentCoroutineContext().ensureActive()
             return true
         } catch (e: CancellationException) {

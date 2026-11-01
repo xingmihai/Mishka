@@ -268,6 +268,11 @@ class MishkaRootService : Service() {
                     val activeMode = RootTetherHijacker.Mode.from(tetherModeActive.ifEmpty { tetherModeRequested })
                     val tproxySupported = submode == Submode.Tun && activeMode == RootTetherHijacker.Mode.PROXY &&
                             RootTetherHijacker.probeTproxySupport()
+                    // 进程已通过 attach 三重校验（PID/cmdline/凭证 + 带鉴权 API + ROOT 透明 DNS），
+                    // 代理此刻即可用。后面的规则装配要跑上百条 iptables，耗时可达十秒级；等它
+                    // 完成再换通知，通知栏会长时间停在「启动中」。bridge 状态仍等装配完成后再
+                    // 发布，避免 restartWhenReady 在装配期间把过渡态误判为可重启。
+                    dynamicNotification.startOrFallbackStatic(storage, tunMode)
                     if (!applyRootRules(storage, submode, tproxySupported, attach = true)) return@launch
                     ProxyServiceBridge.updateState(
                         ProxyServiceStatus(
@@ -279,7 +284,6 @@ class MishkaRootService : Service() {
                             mihomoPid = runner.pid
                         )
                     )
-                    dynamicNotification.startOrFallbackStatic(storage, tunMode)
                     storage.putString(StorageKeys.SERVICE_WAS_RUNNING, "true")
                     // 重连到活着的 mihomo：它仍在 runtime/{uuid}/ 下跑，监控日志从同一目录读。
                     // 代次取重连当下的值；之后的 prepare 会递增，这次监控就不能再删沙箱。
@@ -469,9 +473,18 @@ class MishkaRootService : Service() {
             storage.putString(StorageKeys.ROOT_TETHER_MODE_ACTIVE, tetherModeRequested)
             storage.putString(StorageKeys.ROOT_SUBMODE_ACTIVE, submode.storageValue)
 
-            if (!applyRootRules(storage, submode, tproxyForTether, attach = false)) return@launch
+            // mihomo 已通过 waitForReady（TUN/带鉴权 API/ROOT 透明 DNS 全部就绪），代理此刻即可用。
+            // 热点与 DNS 规则装配要跑上百条 iptables，耗时可达十秒级；等它完成再换通知，通知栏
+            // 会长时间停在「启动中」（磁贴/通知入口尤其明显，此时没有界面告诉用户核心已就绪）。
+            // 只提前通知、不提前 bridge 状态：状态仍等装配完成后发布，避免 restartWhenReady
+            // 在装配期间把过渡态误判为可重启而与本次启动协程并发。
+            dynamicNotification.startOrFallbackStatic(storage, tunMode)
 
-            // 7. 更新状态和通知
+            val rulesStartedAt = Clock.System.now().toEpochMilliseconds()
+            if (!applyRootRules(storage, submode, tproxyForTether, attach = false)) return@launch
+            Log.i(TAG, "ROOT rules applied in ${Clock.System.now().toEpochMilliseconds() - rulesStartedAt} ms")
+
+            // 7. 更新状态（通知已在装配前切换，这里只推进状态机）
             ProxyServiceBridge.updateState(
                 ProxyServiceStatus(
                     ProxyState.Running,
@@ -482,7 +495,6 @@ class MishkaRootService : Service() {
                     mihomoPid = runner.pid
                 )
             )
-            dynamicNotification.startOrFallbackStatic(storage, tunMode)
             storage.putString(StorageKeys.SERVICE_WAS_RUNNING, "true")
             Log.i(TAG, "Proxy running (ROOT $submode)")
 

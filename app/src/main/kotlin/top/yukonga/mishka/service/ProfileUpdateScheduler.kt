@@ -53,7 +53,8 @@ class ProfileUpdateScheduler(
     }
 
     private fun reconcile(entities: List<ImportedEntity>) {
-        val eligible = entities.filter { it.type != ProfileType.File && it.interval >= MIN_INTERVAL_MS }
+        // 只有 Url 有订阅地址可拉取；其它类型的 source 不是 http 地址
+        val eligible = entities.filter { it.type == ProfileType.Url && it.interval >= MIN_INTERVAL_MS }
         val keep = eligible.mapTo(mutableSetOf()) { it.uuid }
         // 撤销：本进程布置过但已失效的（删除订阅），以及 DB 里仍在但不该有闹钟的（间隔改 0）
         ((armed + entities.map { it.uuid }) - keep).forEach { cancelNext(context, it) }

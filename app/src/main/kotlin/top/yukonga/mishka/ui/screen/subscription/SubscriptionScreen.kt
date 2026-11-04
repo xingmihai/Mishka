@@ -30,7 +30,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.yukonga.mishka.R
+import top.yukonga.mishka.domain.model.ProfileType
 import top.yukonga.mishka.domain.model.Subscription
+import top.yukonga.mishka.domain.sharelink.ShareLinkParser
 import top.yukonga.mishka.ui.component.AdaptiveTopAppBar
 import top.yukonga.mishka.ui.component.blur.BlurredBar
 import top.yukonga.mishka.ui.component.blur.rememberBlurBackdrop
@@ -89,7 +91,9 @@ fun SubscriptionScreen(
                     scrollBehavior = scrollBehavior,
                     navigationIcon = {},
                     actions = {
-                        if (uiState.subscriptions.any { it.url.isNotBlank() }) {
+                        // 与 updateAllSubscriptions 的筛选条件保持一致：单节点的 source 非空但
+                        // 不是订阅地址，用它判空会让「全部更新」可见却点了没反应
+                        if (uiState.subscriptions.any { it.type == ProfileType.Url && it.url.isNotBlank() }) {
                             IconButton(
                                 onClick = { viewModel.updateAllSubscriptions() },
                                 enabled = !uiState.isLoading,
@@ -324,20 +328,23 @@ private fun SubscriptionItem(
                     tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                 )
             }
-            Spacer(Modifier.width(8.dp))
-            IconButton(
-                onClick = onRefresh,
-                enabled = !isLoading && subscription.url.isNotBlank(),
-                minHeight = 35.dp,
-                minWidth = 35.dp,
-                backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
-            ) {
-                Icon(
-                    modifier = Modifier.size(20.dp),
-                    imageVector = MiuixIcons.Refresh,
-                    contentDescription = stringResource(R.string.common_update),
-                    tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                )
+            // 单节点链接是静态配置，没有订阅可拉取：直接隐藏更新按钮，而不是留一个灰的
+            if (!ShareLinkParser.isShareLink(subscription.url)) {
+                Spacer(Modifier.width(8.dp))
+                IconButton(
+                    onClick = onRefresh,
+                    enabled = !isLoading && subscription.url.isNotBlank(),
+                    minHeight = 35.dp,
+                    minWidth = 35.dp,
+                    backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
+                ) {
+                    Icon(
+                        modifier = Modifier.size(20.dp),
+                        imageVector = MiuixIcons.Refresh,
+                        contentDescription = stringResource(R.string.common_update),
+                        tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    )
+                }
             }
             Spacer(Modifier.width(8.dp))
             IconButton(

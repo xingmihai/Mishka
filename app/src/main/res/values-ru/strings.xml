@@ -219,6 +219,8 @@
     <string name="subscription_link_label">Ссылка на узел</string>
     <string name="subscription_link_placeholder">vless://…, vmess://…, ss://…</string>
     <string name="subscription_link_name_placeholder">Оставьте пустым, чтобы использовать имя из ссылки</string>
+    <string name="subscription_link_recover_label">Указать ссылку на узел</string>
+    <string name="subscription_link_recover_hint">Узлы, импортированные до обновления, не сохранили исходную ссылку. Вставьте её здесь, чтобы снова сделать профиль редактируемым; для обычных YAML-файлов оставьте поле пустым.</string>
     <string name="subscription_qr">QR-код</string>
     <string name="subscription_qr_summary">Сканировать QR-код для импорта</string>
     <string name="subscription_url_hint">Поддерживаются только файлы конфигурации mihomo (с прокси/правилами)</string>

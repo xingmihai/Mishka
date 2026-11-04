@@ -221,6 +221,8 @@
     <string name="subscription_link_label">Node link</string>
     <string name="subscription_link_placeholder">vless://…, vmess://…, ss://…</string>
     <string name="subscription_link_name_placeholder">Leave blank to use the link remark</string>
+    <string name="subscription_link_recover_label">Re-import node link</string>
+    <string name="subscription_link_recover_hint">Previously imported single nodes stored no original link. Paste it here to make this profile editable; leave empty for ordinary YAML configs.</string>
     <string name="subscription_qr">QR Code</string>
     <string name="subscription_qr_summary">Scan QR code to import</string>
     <string name="subscription_url_hint">Only accepts mihomo config files (with proxies/rules)</string>

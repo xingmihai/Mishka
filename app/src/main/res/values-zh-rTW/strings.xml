@@ -219,6 +219,8 @@
     <string name="subscription_link_label">節點連結</string>
     <string name="subscription_link_placeholder">vless://…、vmess://…、ss://…</string>
     <string name="subscription_link_name_placeholder">留空則使用連結備註</string>
+    <string name="subscription_link_recover_label">補填節點連結</string>
+    <string name="subscription_link_recover_hint">升級前匯入的單節點未保存原始連結。在此貼上連結即可重新產生設定並恢復編輯；一般設定檔留空即可。</string>
     <string name="subscription_qr">QR Code</string>
     <string name="subscription_qr_summary">掃描 QR Code 匯入</string>
     <string name="subscription_url_hint">僅接受 mihomo 設定檔（包含代理／規則）</string>

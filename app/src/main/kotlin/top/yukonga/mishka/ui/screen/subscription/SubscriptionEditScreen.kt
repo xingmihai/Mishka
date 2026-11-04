@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.yukonga.mishka.R
 import top.yukonga.mishka.domain.model.ProfileType
+import top.yukonga.mishka.domain.sharelink.ShareLinkParser
 import top.yukonga.mishka.ui.component.AdaptiveTopAppBar
 import top.yukonga.mishka.ui.component.CardItem
 import top.yukonga.mishka.ui.component.blur.BlurredBar
@@ -82,6 +83,8 @@ fun SubscriptionEditScreen(
     }
 
     val isFile = subscription.type == ProfileType.File
+    // 单节点复用 File 类型落库，区别只在 source 是不是分享链接
+    val isLink = ShareLinkParser.isShareLink(subscription.url)
     val hasChanges = name != subscription.name ||
             url != subscription.url ||
             userAgent.trim() != subscription.userAgent ||
@@ -138,7 +141,38 @@ fun SubscriptionEditScreen(
                         .padding(horizontal = 12.dp)
                         .padding(bottom = 6.dp),
                 )
-                if (!isFile) {
+                if (isFile) {
+                    // isLink：链接就是源，改它等于换节点，保存时重新生成 config.yaml。
+                    // 其余 File：普通配置文件没存原始链接，这里提供补粘入口；留空则行为不变。
+                    SmallTitle(
+                        text = stringResource(
+                            if (isLink) R.string.subscription_link_label
+                            else R.string.subscription_link_recover_label
+                        )
+                    )
+                    TextField(
+                        value = url,
+                        onValueChange = { url = it },
+                        label = stringResource(R.string.subscription_link_placeholder),
+                        useLabelAsPlaceholder = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp)
+                            .padding(bottom = 6.dp),
+                    )
+                    if (!isLink) {
+                        Text(
+                            text = stringResource(R.string.subscription_link_recover_hint),
+                            fontSize = 12.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp)
+                                .padding(bottom = 6.dp),
+                        )
+                    }
+                }
+                if (!isFile && !isLink) {
                     SmallTitle(text = stringResource(R.string.subscription_sub_url))
                     TextField(
                         value = url,

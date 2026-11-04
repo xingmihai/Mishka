@@ -222,8 +222,13 @@ class BackupManager(
         interval, upload, download, total, expire, createdAt,
     )
 
+    /**
+     * 与 Room 的 ProfileTypeConverter 保持同一策略：未知类型降级为 [ProfileType.File]。
+     * 直接丢弃会让整条备份内容消失；降级成静态配置既保留内容，也不会把非 http 的
+     * source 误当成可刷新的订阅地址。
+     */
     private fun BackupProfile.profileType(): ProfileType? =
-        runCatching { ProfileType.valueOf(type) }.getOrNull()
+        ProfileType.fromStringOrDefault(type)
 
     private fun BackupProfile.toImportedEntity(): ImportedEntity? = profileType()?.let {
         ImportedEntity(

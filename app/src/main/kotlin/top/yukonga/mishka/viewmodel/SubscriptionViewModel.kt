@@ -147,14 +147,18 @@ class SubscriptionViewModel(
      *
      * 解析与建档都在 runPipeline 内：解析失败会抛 [ShareLinkException]，由 localizedMessage
      * 映射成本地化文案，且不创建 Pending、不留 DB / 文件残留。
+     *
+     * 记录按 [ProfileType.File] 落库，但 `source` 存原始链接（普通配置文件为空串）。
+     * 这样既能在编辑页回填、重新解析，也不会让任何读取本数据库的构建把它当成订阅地址。
      */
     fun addFromLink(name: String, link: String, onComplete: () -> Unit = {}) {
         runPipeline(ProfileOperation.Import, errorKey = R.string.error_import_failed) {
             // 先解析再建 Pending：链接不合法时不留任何 DB / 文件残留
-            val proxy = ShareLinkParser.parse(link)
+            val trimmedLink = link.trim()
+            val proxy = ShareLinkParser.parse(trimmedLink)
             val resolvedName = name.trim().ifEmpty { proxy.name }
             val config = ShareLinkParser.toConfig(ShareLinkParser.renamed(proxy, resolvedName))
-            val sub = repository.create(ProfileType.File, resolvedName, "")
+            val sub = repository.create(ProfileType.File, resolvedName, trimmedLink)
             pendingOnFailure(sub.id) {
                 fileManager.savePendingConfig(sub.id, config)
                 processor.apply(sub.id, ::reportProgress)
@@ -168,7 +172,8 @@ class SubscriptionViewModel(
      */
     fun fetchSubscription(id: String) {
         val sub = _uiState.value.subscriptions.find { it.id == id } ?: return
-        if (sub.url.isBlank()) {
+        // 只有 Url 有订阅地址可拉取；单节点的 source 非空但不是 http 地址
+        if (sub.type != ProfileType.Url || sub.url.isBlank()) {
             viewModelScope.launch {
                 _uiState.value = _uiState.value.copy(error = context.getString(R.string.subscription_file_only_no_update))
             }
@@ -207,7 +212,8 @@ class SubscriptionViewModel(
      * mixed-port）会跟着一起失败。
      */
     fun updateAllSubscriptions() {
-        val targets = _uiState.value.subscriptions.filter { it.url.isNotBlank() }
+        // 按类型筛选：单节点的 source 非空但不是订阅地址
+        val targets = _uiState.value.subscriptions.filter { it.type == ProfileType.Url && it.url.isNotBlank() }
         if (targets.isEmpty()) return
         if (isBusy()) return
 
@@ -257,8 +263,12 @@ class SubscriptionViewModel(
     }
 
     /**
-     * 编辑订阅属性（名称、URL、更新间隔）。URL 类型走 ProfileProcessor 重新校验，
-     * File 类型仅 patch DB（无 source 可重新拉取）。
+     * 编辑订阅属性（名称、source、更新间隔）。
+     *
+     * - [ProfileType.Url]：patch 后走 ProfileProcessor 重新拉取校验。
+     * - 提交的 source 是单节点分享链接：重新解析并重新生成 config.yaml，再走导入管线提交。
+     *   包含「普通 File 配置补粘链接」的恢复场景 —— 只要填了链接就按单节点处理。
+     * - 其余 [ProfileType.File]：仅 patch DB，没有可重新拉取的 source。
      */
     fun editSubscription(
         uuid: String,
@@ -270,12 +280,36 @@ class SubscriptionViewModel(
         onComplete: () -> Unit = {},
     ) {
         runPipeline(ProfileOperation.Edit, errorKey = R.string.error_save_failed) {
-            repository.patch(uuid, name, source, interval, userAgent, ageSecretKey)
-            // 校验字段并判定是否需重新拉取：Url 订阅走完整 fetch 管线，File 订阅直接提交
-            if (repository.validatePendingForCommit(uuid)) {
-                processor.apply(uuid, ::reportProgress)
+            val trimmedSource = source.trim()
+            val wasLink = _uiState.value.subscriptions
+                .find { it.id == uuid }?.url
+                ?.let { ShareLinkParser.isShareLink(it) } == true
+            // 单节点的 source 被清空或改写成非链接时，不能静默落到普通 File 分支：那样
+            // config.yaml 仍是旧节点，DB 却不再保存链接，两者语义就分叉了
+            if (wasLink && !ShareLinkParser.isShareLink(trimmedSource)) {
+                throw ShareLinkException("single-node profile requires a valid share link")
+            }
+            // 按提交的 source 判定，而不是按存储类型：单节点复用 File 落库，普通文件与它
+            // 类型相同，唯一区别就是 source 是否为分享链接。链接填错时 parse 会报错，
+            // 不会把 "vless://..." 当成普通 source 静默提交。
+            if (ShareLinkParser.isShareLink(trimmedSource)) {
+                // 链接是可编辑的源：先解析（失败就不建 Pending、不改 DB），再重新生成配置。
+                // 不能只 patch DB —— 那样 config.yaml 还是旧节点，改了等于没改。
+                val proxy = ShareLinkParser.parse(trimmedSource)
+                val config = ShareLinkParser.toConfig(ShareLinkParser.renamed(proxy, name))
+                pendingOnFailure(uuid) {
+                    repository.patch(uuid, name, trimmedSource, interval, userAgent, ageSecretKey)
+                    fileManager.savePendingConfig(uuid, config)
+                    processor.apply(uuid, ::reportProgress)
+                }
             } else {
-                repository.commitPendingProfile(uuid)
+                repository.patch(uuid, name, source, interval, userAgent, ageSecretKey)
+                // 校验字段并判定是否需重新拉取：Url 订阅走完整 fetch 管线，File 订阅直接提交
+                if (repository.validatePendingForCommit(uuid)) {
+                    processor.apply(uuid, ::reportProgress)
+                } else {
+                    repository.commitPendingProfile(uuid)
+                }
             }
             onComplete()
         }

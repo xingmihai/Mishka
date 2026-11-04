@@ -219,6 +219,8 @@
     <string name="subscription_link_label">节点链接</string>
     <string name="subscription_link_placeholder">vless://…、vmess://…、ss://…</string>
     <string name="subscription_link_name_placeholder">留空则使用链接备注</string>
+    <string name="subscription_link_recover_label">补填节点链接</string>
+    <string name="subscription_link_recover_hint">升级前导入的单节点未保存原始链接。在此粘贴链接即可重新生成配置并恢复编辑；普通配置文件留空即可。</string>
     <string name="subscription_qr">二维码</string>
     <string name="subscription_qr_summary">扫描二维码导入</string>
     <string name="subscription_url_hint">仅接受 mihomo 配置文件(包含代理/规则)</string>

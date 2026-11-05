@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -47,14 +48,17 @@ fun LazyListScope.latencySection(
                 .padding(bottom = 6.dp),
             insideMargin = PaddingValues(16.dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                LatencyItem("Baidu", state.latencyBaidu)
-                LatencyItem("Cloudflare", state.latencyCloudflare)
-                LatencyItem("Google", state.latencyGoogle)
+            // 四个探针排 2x2：横排四列在窄屏上「Cloudflare」会被压到与圆点重叠。
+            // 每格 weight(1f) 均分，行间留 12dp 与 Card 内边距呼应
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    LatencyItem("Baidu", state.latencyBaidu)
+                    LatencyItem("Cloudflare", state.latencyCloudflare)
+                }
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    LatencyItem("Google", state.latencyGoogle)
+                    LatencyItem("GitHub", state.latencyGithub)
+                }
             }
         }
     }
@@ -65,16 +69,20 @@ private fun LatencyHeader(
     state: HomeUiState,
     onTestLatency: () -> Unit,
 ) {
-    val allTested = state.latencyBaidu >= 0 || state.latencyCloudflare >= 0 || state.latencyGoogle >= 0
+    val allTested = state.latencyBaidu >= 0 || state.latencyCloudflare >= 0 ||
+            state.latencyGoogle >= 0 || state.latencyGithub >= 0
+    // Google 与 GitHub 同属「通常需代理才能通」的站点，任一通即说明代理出口可用；
+    // 只有 Cloudflare 通仍算部分连通，与加入 GitHub 前的判定口径一致
+    val proxiedReachable = state.latencyGoogle >= 0 || state.latencyGithub >= 0
     val statusColor = when {
         !allTested -> StatusColors.neutral
-        state.latencyGoogle >= 0 -> StatusColors.healthy
+        proxiedReachable -> StatusColors.healthy
         state.latencyCloudflare >= 0 -> StatusColors.warning
         else -> StatusColors.danger
     }
     val statusText = when {
         !allTested -> stringResource(R.string.home_latency_untested)
-        state.latencyGoogle >= 0 -> stringResource(R.string.home_latency_normal)
+        proxiedReachable -> stringResource(R.string.home_latency_normal)
         state.latencyCloudflare >= 0 -> stringResource(R.string.home_latency_partial)
         else -> stringResource(R.string.home_latency_abnormal)
     }
@@ -127,11 +135,14 @@ private fun LatencyHeader(
 }
 
 @Composable
-private fun LatencyItem(name: String, delay: Int) {
+private fun RowScope.LatencyItem(name: String, delay: Int) {
     // -1 视为"未测/不可达"，由 token 映射到 neutral 灰
     val color = StatusColors.delay(if (delay < 0) null else delay)
 
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        modifier = Modifier.weight(1f),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp),

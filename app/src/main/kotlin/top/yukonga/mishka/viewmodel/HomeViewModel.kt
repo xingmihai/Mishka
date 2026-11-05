@@ -57,6 +57,7 @@ data class HomeUiState(
     val latencyBaidu: Int = -1,
     val latencyCloudflare: Int = -1,
     val latencyGoogle: Int = -1,
+    val latencyGithub: Int = -1,
     val isTestingLatency: Boolean = false,
     // false = 本轮退回了组拨测、未经规则引擎，UI 据此标注
     val latencyViaRules: Boolean = true,
@@ -101,11 +102,18 @@ data class SpeedSnapshot(
     val history: TrafficHistory = TrafficHistory(),
 )
 
-/** 主页连通性体检的三个探针；URL 一律用 http 明文，避免 TLS 握手把测量口径拉长 */
+/**
+ * 主页连通性体检的四个探针；URL 一律用 http 明文，避免 TLS 握手把测量口径拉长。
+ *
+ * GitHub 用主域根路径：明文访问会返回 301，[RuleLatencyTester] 不跟随跳转、把 3xx 计为
+ * 已响应，因此测到的是「到 github.com 的首包往返」，与其余三个明文探针口径一致。用主域
+ * 而非 api.github.com，是为了让规则匹配与用户实际访问 GitHub 时命中同一条规则。
+ */
 enum class LatencyProbe(val url: String) {
     Baidu("http://www.baidu.com"),
     Cloudflare("http://www.cloudflare.com/cdn-cgi/trace"),
     Google("http://www.google.com/generate_204"),
+    Github("http://github.com"),
 }
 
 /** 高频内存快照 */
@@ -723,7 +731,7 @@ class HomeViewModel(
     }
 
     /**
-     * 三个探针一律经 [RuleLatencyTester] 按规则实测；mixed-port 解析不到时退回 GLOBAL 组拨测，
+     * 四个探针一律经 [RuleLatencyTester] 按规则实测；mixed-port 解析不到时退回 GLOBAL 组拨测，
      * 并置 `latencyViaRules = false` 让 UI 标注，不静默给出误导性数字。
      */
     fun testLatency() {
@@ -765,6 +773,7 @@ class HomeViewModel(
                 LatencyProbe.Baidu -> it.copy(latencyBaidu = delay)
                 LatencyProbe.Cloudflare -> it.copy(latencyCloudflare = delay)
                 LatencyProbe.Google -> it.copy(latencyGoogle = delay)
+                LatencyProbe.Github -> it.copy(latencyGithub = delay)
             }
         }
     }

@@ -47,9 +47,9 @@ import top.yukonga.mishka.ui.theme.ThemeConfig
 import top.yukonga.mishka.ui.theme.readThemeConfig
 import top.yukonga.mishka.ui.theme.resolveIsDark
 import top.yukonga.mishka.viewmodel.AppProxyViewModel
+import top.yukonga.mishka.viewmodel.AutomationViewModel
 import top.yukonga.mishka.viewmodel.ConnectionViewModel
 import top.yukonga.mishka.viewmodel.DnsQueryViewModel
-import top.yukonga.mishka.viewmodel.AutomationViewModel
 import top.yukonga.mishka.viewmodel.ExternalControlViewModel
 import top.yukonga.mishka.viewmodel.HomeViewModel
 import top.yukonga.mishka.viewmodel.LogViewModel
@@ -225,7 +225,7 @@ class MainActivity : ComponentActivity() {
         }
 
         // 异步检测 root 权限：先用缓存值，检测完成后更新 State 触发 recompose
-        val hasRootState = androidx.compose.runtime.mutableStateOf(
+        val hasRootState = mutableStateOf(
             storage.getString(StorageKeys.HAS_ROOT, "false") == "true"
         )
         lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
@@ -355,6 +355,7 @@ class MainActivity : ComponentActivity() {
             statusBarStyle = systemBarStyle,
             navigationBarStyle = systemBarStyle,
         )
+        window.isNavigationBarContrastEnforced = false
         enforceSystemBarsAppearance(isDark)
         window.decorView.post {
             enforceSystemBarsAppearance(isDark)

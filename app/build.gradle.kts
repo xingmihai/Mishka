@@ -16,6 +16,7 @@ plugins {
 
 dependencies {
     baselineProfile(projects.baselineprofile)
+    ksp(libs.androidx.room3.compiler)
     implementation(platform(libs.koin.bom))
     implementation(libs.bundles.koin)
     implementation(libs.bundles.androidx.lifecycle)
@@ -27,11 +28,11 @@ dependencies {
     implementation(libs.androidx.activity)
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.profileinstaller)
-    implementation(libs.material.icons.extended)
     implementation(libs.hiddenapibypass)
     implementation(libs.quickie.bundled)
     implementation(libs.scripta.editor)
-    ksp(libs.androidx.room3.compiler)
+    implementation(libs.androidx.compose.ui.tooling.preview)
+    debugImplementation(libs.androidx.compose.ui.tooling)
 }
 
 room3 {
@@ -72,6 +73,7 @@ android {
         }
         debug {
             if (keystoreFile != null) signingConfig = signingConfigs.getByName("release")
+            applicationIdSuffix = ".debug"
         }
     }
     buildFeatures {
@@ -87,6 +89,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_21
     }
     defaultConfig {
+        buildConfigField("String", "MIHOMO_VERSION", "\"${providers.gradleProperty("mihomo.version").orElse("dev").get()}\"")
         applicationId = ProjectConfig.PACKAGE_NAME
         minSdk = ProjectConfig.Android.MIN_SDK
         targetSdk = ProjectConfig.Android.TARGET_SDK

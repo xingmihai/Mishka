@@ -1,12 +1,13 @@
 package top.yukonga.mishka.ui.screen.settings
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.add
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
@@ -25,7 +26,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.computedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -52,16 +53,14 @@ import top.yukonga.mishka.R
 import top.yukonga.mishka.ui.component.AdaptiveTopAppBar
 import top.yukonga.mishka.ui.component.BackNavigationIcon
 import top.yukonga.mishka.ui.component.blur.BlurredBar
-import top.yukonga.mishka.ui.component.blur.ColorBlendToken
 import top.yukonga.mishka.ui.component.blur.rememberBlurBackdrop
 import top.yukonga.mishka.ui.component.blur.rememberBlurEnabled
 import top.yukonga.mishka.ui.component.effect.BgEffectBackground
 import top.yukonga.mishka.ui.component.overScrollVertical
 import top.yukonga.mishka.ui.theme.LocalAppDarkMode
+import top.yukonga.mishka.ui.util.LocalHorizontalCutoutSides
 import top.yukonga.mishka.ui.util.horizontalCutoutPadding
 import top.yukonga.mishka.ui.util.sidebarStartInset
-import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.ScrollBehavior
@@ -72,6 +71,7 @@ import top.yukonga.miuix.kmp.blur.BlurBlendMode
 import top.yukonga.miuix.kmp.blur.BlurColors
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
+import top.yukonga.miuix.kmp.glass.GlassCard
 import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.material.isRuntimeShaderSupported
 import top.yukonga.miuix.kmp.preference.ArrowPreference
@@ -90,7 +90,7 @@ fun AboutScreen(
     // 滚动进度是帧率级 State：保持 State 形式，读点限制在 topBar 与各 graphicsLayer，
     // 组合期以值读取会让整个 AboutContent 每帧重组
     val scrollProgressState = remember {
-        derivedStateOf {
+        computedStateOf {
             when {
                 lazyListState.firstVisibleItemIndex > 0 -> 1f
 
@@ -106,10 +106,12 @@ fun AboutScreen(
         }
     }
     // 布尔/夹紧后再 derive，等值去重让顶栏只在阈值区间内重组
-    val heroCollapsed by remember { derivedStateOf { scrollProgressState.value == 1f } }
-    val titleAlpha by remember {
-        derivedStateOf { ((scrollProgressState.value - 0.35f) / 0.65f).coerceIn(0f, 1f) }
-    }
+    val heroCollapsed by remember { computedStateOf { scrollProgressState.value == 1f } }
+    val showTitle by remember { computedStateOf { scrollProgressState.value >= 0.45f } }
+    val titleAlpha = animateFloatAsState(
+        targetValue = if (showTitle) 1f else 0f,
+        animationSpec = tween(durationMillis = 200),
+    )
 
     val backdrop = rememberBlurBackdrop()
     val blurActive = backdrop != null && heroCollapsed
@@ -123,7 +125,7 @@ fun AboutScreen(
                     expandable = false,
                     scrollBehavior = scrollBehavior,
                     titleColor = colorScheme.onSurface,
-                    titleAlpha = { titleAlpha },
+                    titleAlpha = { titleAlpha.value },
                     defaultWindowInsetsPadding = false,
                     navigationIcon = { BackNavigationIcon(onBack) },
                 )
@@ -131,7 +133,7 @@ fun AboutScreen(
         },
         contentWindowInsets = WindowInsets.systemBars
             .add(WindowInsets.displayCutout)
-            .only(WindowInsetsSides.Horizontal),
+            .only(LocalHorizontalCutoutSides.current),
     ) { innerPadding ->
         Box(modifier = if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier) {
             AboutContent(
@@ -164,10 +166,6 @@ private fun AboutContent(
     val blurEnabled by rememberBlurEnabled()
     val effectBackground = remember(blurEnabled) { isRuntimeShaderSupported() && blurEnabled }
 
-    val cardBlendColors = remember(isDark) {
-        if (isDark) ColorBlendToken.Overlay_Thin_Light
-        else ColorBlendToken.Pured_Regular_Light
-    }
     val logoBlend = remember(isDark) {
         if (isDark) {
             listOf(
@@ -306,6 +304,7 @@ private fun AboutContent(
                 .scrollEndHaptic()
                 .overScrollVertical(scrollBehavior)
                 .nestedScroll(scrollBehavior.nestedScrollConnection),
+            overscrollEffect = null,
             contentPadding = PaddingValues(
                 top = scrollPadding.calculateTopPadding(),
                 start = scrollPadding.calculateStartPadding(layoutDirection),
@@ -331,26 +330,11 @@ private fun AboutContent(
                         modifier = Modifier.padding(bottom = 12.dp),
                     ) {
                         SmallTitle(text = stringResource(R.string.about_open_source))
-                        Card(
+                        GlassCard(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 12.dp)
-                                .padding(bottom = 12.dp)
-                                .then(
-                                    if (blurEnabled) {
-                                        Modifier.textureBlur(
-                                            backdrop = backdrop,
-                                            shape = RoundedCornerShape(16.dp),
-                                            blurRadius = 60f,
-                                            colors = BlurColors(blendColors = cardBlendColors),
-                                            enabled = true,
-                                        )
-                                    } else Modifier
-                                ),
-                            colors = CardDefaults.defaultColors(
-                                if (blurEnabled) Color.Transparent else colorScheme.surfaceContainer,
-                                Color.Transparent,
-                            ),
+                                .padding(bottom = 12.dp),
                         ) {
                             val ossProjects = remember(mihomoVersion) {
                                 listOf(

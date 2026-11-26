@@ -13,18 +13,22 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.drop
 import top.yukonga.mishka.R
 import top.yukonga.mishka.platform.FilePicker
 import top.yukonga.mishka.platform.PlatformStorage
@@ -50,8 +54,8 @@ import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.glass.GlassDialog
 import top.yukonga.miuix.kmp.glass.GlassDialogButtonRole
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Backup
-import top.yukonga.miuix.kmp.icon.extended.Import
+import top.yukonga.miuix.kmp.icon.glass.Backup
+import top.yukonga.miuix.kmp.icon.glass.Import
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
@@ -242,7 +246,7 @@ private fun LocalBackupDialog(
             title = stringResource(R.string.backup_export_local),
             startAction = {
                 Icon(
-                    imageVector = MiuixIcons.Backup,
+                    imageVector = MiuixIcons.Glass.Backup,
                     contentDescription = null,
                     modifier = Modifier.padding(end = 16.dp),
                     tint = MiuixTheme.colorScheme.onSurface,
@@ -256,7 +260,7 @@ private fun LocalBackupDialog(
             title = stringResource(R.string.backup_restore_local),
             startAction = {
                 Icon(
-                    imageVector = MiuixIcons.Import,
+                    imageVector = MiuixIcons.Glass.Import,
                     contentDescription = null,
                     modifier = Modifier.padding(end = 16.dp),
                     tint = MiuixTheme.colorScheme.onSurface,
@@ -287,9 +291,23 @@ private fun WebDavDialog(
     onBackup: () -> Unit,
     onRestore: () -> Unit,
 ) {
-    var url by remember { mutableStateOf(storage.getString(StorageKeys.WEBDAV_URL, "")) }
-    var username by remember { mutableStateOf(storage.getString(StorageKeys.WEBDAV_USERNAME, "")) }
-    var password by remember { mutableStateOf(storage.getString(StorageKeys.WEBDAV_PASSWORD, "")) }
+    val urlState = rememberTextFieldState(initialText = storage.getString(StorageKeys.WEBDAV_URL, ""))
+    val usernameState = rememberTextFieldState(initialText = storage.getString(StorageKeys.WEBDAV_USERNAME, ""))
+    val passwordState = rememberTextFieldState(initialText = storage.getString(StorageKeys.WEBDAV_PASSWORD, ""))
+
+    LaunchedEffect(urlState, usernameState, passwordState) {
+        snapshotFlow {
+            Triple(
+                urlState.text.toString(),
+                usernameState.text.toString(),
+                passwordState.text.toString(),
+            )
+        }.drop(1).collect { (url, username, password) ->
+            storage.putString(StorageKeys.WEBDAV_URL, url)
+            storage.putString(StorageKeys.WEBDAV_USERNAME, username)
+            storage.putString(StorageKeys.WEBDAV_PASSWORD, password)
+        }
+    }
 
     GlassDialog(
         show = show,
@@ -306,11 +324,7 @@ private fun WebDavDialog(
                     .verticalScroll(rememberScrollState()),
             ) {
                 TextField(
-                    value = url,
-                    onValueChange = {
-                        url = it
-                        storage.putString(StorageKeys.WEBDAV_URL, it)
-                    },
+                    state = urlState,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 24.dp)
@@ -318,11 +332,7 @@ private fun WebDavDialog(
                     label = stringResource(R.string.backup_server_url),
                 )
                 TextField(
-                    value = username,
-                    onValueChange = {
-                        username = it
-                        storage.putString(StorageKeys.WEBDAV_USERNAME, it)
-                    },
+                    state = usernameState,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 24.dp)
@@ -330,11 +340,7 @@ private fun WebDavDialog(
                     label = stringResource(R.string.backup_username),
                 )
                 TextField(
-                    value = password,
-                    onValueChange = {
-                        password = it
-                        storage.putString(StorageKeys.WEBDAV_PASSWORD, it)
-                    },
+                    state = passwordState,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 24.dp)
@@ -345,7 +351,7 @@ private fun WebDavDialog(
                     title = stringResource(R.string.backup_now),
                     startAction = {
                         Icon(
-                            imageVector = MiuixIcons.Backup,
+                            imageVector = MiuixIcons.Glass.Backup,
                             contentDescription = null,
                             modifier = Modifier.padding(end = 16.dp),
                             tint = MiuixTheme.colorScheme.onSurface,
@@ -359,7 +365,7 @@ private fun WebDavDialog(
                     title = stringResource(R.string.backup_restore_now),
                     startAction = {
                         Icon(
-                            imageVector = MiuixIcons.Import,
+                            imageVector = MiuixIcons.Glass.Import,
                             contentDescription = null,
                             modifier = Modifier.padding(end = 16.dp),
                             tint = MiuixTheme.colorScheme.onSurface,

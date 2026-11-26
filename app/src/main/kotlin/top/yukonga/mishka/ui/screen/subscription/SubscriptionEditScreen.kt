@@ -8,15 +8,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.InputTransformation
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -46,6 +48,10 @@ import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 
+private val DigitsOnlyTransformation = InputTransformation {
+    if (asCharSequence().any { !it.isDigit() }) revertAllChanges()
+}
+
 /**
  * 订阅编辑页面 —— 编辑名称、URL、自动更新间隔
  */
@@ -61,15 +67,20 @@ fun SubscriptionEditScreen(
     val subscription = uiState.subscriptions.find { it.id == uuid }
     val scrollBehavior = MiuixScrollBehavior()
 
-    var name by rememberSaveable(uuid) { mutableStateOf(subscription?.name ?: "") }
-    var url by rememberSaveable(uuid) { mutableStateOf(subscription?.url ?: "") }
-    var userAgent by rememberSaveable(uuid) { mutableStateOf(subscription?.userAgent ?: "") }
-    var ageSecretKey by rememberSaveable(uuid) { mutableStateOf(subscription?.ageSecretKey ?: "") }
-    var intervalMinutes by rememberSaveable(uuid) {
-        mutableStateOf(
-            if ((subscription?.interval ?: 0) > 0) ((subscription?.interval ?: 0) / 60000).toString() else ""
+    val nameState = key(uuid) { rememberTextFieldState(initialText = subscription?.name ?: "") }
+    val urlState = key(uuid) { rememberTextFieldState(initialText = subscription?.url ?: "") }
+    val userAgentState = key(uuid) { rememberTextFieldState(initialText = subscription?.userAgent ?: "") }
+    val ageSecretKeyState = key(uuid) { rememberTextFieldState(initialText = subscription?.ageSecretKey ?: "") }
+    val intervalState = key(uuid) {
+        rememberTextFieldState(
+            initialText = if ((subscription?.interval ?: 0) > 0) ((subscription?.interval ?: 0) / 60000).toString() else "",
         )
     }
+    val name = nameState.text.toString()
+    val url = urlState.text.toString()
+    val userAgent = userAgentState.text.toString()
+    val ageSecretKey = ageSecretKeyState.text.toString()
+    val intervalMinutes = intervalState.text.toString()
 
     if (subscription == null) {
         onBack()
@@ -115,8 +126,7 @@ fun SubscriptionEditScreen(
                 item {
                     SmallTitle(text = stringResource(R.string.subscription_config_name))
                     TextField(
-                        value = name,
-                        onValueChange = { name = it },
+                        state = nameState,
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 12.dp)
@@ -132,8 +142,7 @@ fun SubscriptionEditScreen(
                             )
                         )
                         TextField(
-                            value = url,
-                            onValueChange = { url = it },
+                            state = urlState,
                             label = stringResource(R.string.subscription_link_placeholder),
                             useLabelAsPlaceholder = true,
                             modifier = Modifier
@@ -156,8 +165,7 @@ fun SubscriptionEditScreen(
                     if (!isFile && !isLink) {
                         SmallTitle(text = stringResource(R.string.subscription_sub_url))
                         TextField(
-                            value = url,
-                            onValueChange = { url = it },
+                            state = urlState,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 12.dp)
@@ -165,8 +173,7 @@ fun SubscriptionEditScreen(
                         )
                         SmallTitle(text = stringResource(R.string.subscription_user_agent))
                         TextField(
-                            value = userAgent,
-                            onValueChange = { userAgent = it },
+                            state = userAgentState,
                             label = stringResource(R.string.subscription_user_agent_placeholder),
                             useLabelAsPlaceholder = true,
                             modifier = Modifier
@@ -176,8 +183,7 @@ fun SubscriptionEditScreen(
                         )
                         SmallTitle(text = stringResource(R.string.subscription_age_secret_key))
                         TextField(
-                            value = ageSecretKey,
-                            onValueChange = { ageSecretKey = it },
+                            state = ageSecretKeyState,
                             label = stringResource(R.string.subscription_age_secret_key_placeholder),
                             useLabelAsPlaceholder = true,
                             modifier = Modifier
@@ -187,8 +193,9 @@ fun SubscriptionEditScreen(
                         )
                         SmallTitle(text = stringResource(R.string.subscription_auto_update))
                         TextField(
-                            value = intervalMinutes,
-                            onValueChange = { intervalMinutes = it.filter { c -> c.isDigit() } },
+                            state = intervalState,
+                            inputTransformation = DigitsOnlyTransformation,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             label = stringResource(R.string.subscription_auto_update_placeholder),
                             useLabelAsPlaceholder = true,
                             modifier = Modifier

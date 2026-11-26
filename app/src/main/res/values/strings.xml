@@ -57,7 +57,6 @@
     <string name="external_proxy_not_running">Proxy is not running</string>
 
     <!-- Service Errors -->
-    <string name="error_vpn_failed">VPN establishment failed: %1$s</string>
     <string name="error_vpn_denied">VPN permission denied</string>
     <string name="error_vpn_no_selected_apps">Select at least one installed app other than Mishka before starting VPN.</string>
     <string name="error_vpn_not_ready">VPN startup did not complete or its control API is unavailable</string>
@@ -71,7 +70,6 @@
     <string name="error_mihomo_start_failed">mihomo start failed:\n%1$s</string>
     <string name="error_generic_start_failed">Start failed: %1$s</string>
     <string name="error_foreground_failed">Failed to start foreground service: %1$s</string>
-    <string name="error_fd_setup_failed">Failed to prepare TUN file descriptor: %1$s</string>
     <string name="error_tun_init_failed">TUN init failed: %1$s</string>
     <string name="error_tproxy_unsupported">ROOT TPROXY requires kernel xt_TPROXY/xt_socket modules which are not available on this device</string>
     <string name="error_no_active_profile">No active subscription. Please import a subscription before starting the proxy.</string>
@@ -94,6 +92,7 @@
     <string name="refresh_complete">Refresh complete</string>
     <string name="common_more">More</string>
     <string name="common_close">Close</string>
+    <string name="common_copy">Copy</string>
     <string name="common_delete">Delete</string>
     <string name="common_edit">Edit</string>
     <string name="common_update">Update</string>
@@ -110,6 +109,7 @@
 
     <!-- Home - Status -->
     <string name="home_starting">Starting</string>
+    <string name="home_restarting">Restarting</string>
     <string name="home_running">Running</string>
     <string name="home_stopping">Stopping</string>
     <string name="home_stopped">Stopped</string>
@@ -123,11 +123,28 @@
     <string name="home_uptime_minutes">%1$dm</string>
     <string name="home_uptime_hours_minutes">%1$dh %2$dm</string>
     <string name="home_uptime_days_hours">%1$dd %2$dh</string>
+    <string name="home_startup_cleaning">Cleaning up</string>
+    <string name="home_startup_reconnecting">Reconnecting</string>
+    <string name="home_startup_preparing">Preparing</string>
+    <string name="home_startup_establishing_vpn">Creating VPN</string>
+    <string name="home_startup_starting_core">Starting core</string>
+    <string name="home_startup_transforming">Applying overrides</string>
+    <string name="home_startup_parsing">Parsing config</string>
+    <string name="home_startup_downloading_geo">Downloading Geo data</string>
+    <string name="home_startup_loading_geo">Loading Geo rules</string>
+    <string name="home_startup_loading_geo_progress">Loading Geo rules (%1$d/%2$d)</string>
+    <string name="home_startup_starting_listeners">Starting listeners</string>
+    <string name="home_startup_loading_proxy_providers">Loading proxy providers</string>
+    <string name="home_startup_loading_proxy_providers_progress">Loading proxies (%1$d/%2$d)</string>
+    <string name="home_startup_loading_rule_providers">Loading rule sets</string>
+    <string name="home_startup_loading_rule_providers_progress">Loading rules (%1$d/%2$d)</string>
+    <string name="home_startup_downloading_ui">Downloading Web UI</string>
+    <string name="home_startup_starting_dns">Starting DNS</string>
+    <string name="home_startup_applying_rules">Applying routing</string>
 
     <!-- Home - Action Buttons -->
     <string name="home_restart">Restart</string>
     <string name="home_stop">Stop</string>
-    <string name="home_reload">Hot Reload</string>
     <string name="home_start">Start</string>
     <string name="home_starting_btn">Starting...</string>
     <string name="home_stopping_btn">Stopping...</string>
@@ -178,6 +195,7 @@
     <!-- Proxy -->
     <string name="proxy_title">Proxy Groups</string>
     <string name="proxy_no_groups">No proxy groups</string>
+    <string name="proxy_select_group_hint">Select a proxy group</string>
     <string name="proxy_start_first">Please start the proxy service first</string>
     <string name="proxy_mode_direct_hint">Direct mode is active: all traffic bypasses the proxy. Group selections are saved but only take effect after switching back to rule mode.</string>
     <string name="proxy_mode_global_hint">Global mode is active: only the GLOBAL group routes traffic. Selections in other groups take effect after switching back to rule mode.</string>
@@ -278,6 +296,16 @@
     <string name="log_no_match">No matching results</string>
     <string name="log_waiting">Waiting for logs...</string>
     <string name="log_not_connected">Not connected</string>
+    <string name="log_disabled">Logging disabled</string>
+    <string name="log_disabled_hint">Log level is set to silent. Enable it in your config or Override Settings.</string>
+    <string name="log_detail_title">Log Details</string>
+    <string name="log_detail_level">Level</string>
+    <string name="log_detail_protocol">Protocol</string>
+    <string name="log_detail_source">Source</string>
+    <string name="log_detail_target">Target</string>
+    <string name="log_detail_rule">Rule</string>
+    <string name="log_detail_proxy">Proxy</string>
+    <string name="log_detail_raw">Raw</string>
 
     <!-- DNS -->
     <string name="dns_title">DNS Query</string>
@@ -332,31 +360,30 @@
     <string name="settings_subscription_via_proxy">Update via proxy</string>
     <string name="settings_subscription_via_proxy_summary">Use proxy when updating subscriptions</string>
     <string name="settings_restart_after_update">Restart after update</string>
-    <string name="settings_restart_after_update_summary">Restart the proxy when the active profile is updated, so the new config takes effect (briefly interrupts connections)</string>
+    <string name="settings_restart_after_update_summary">Restart proxy after active profile updates</string>
     <string name="settings_auto_connect">Connect on Launch</string>
-    <string name="settings_auto_connect_summary">Start the proxy when the app opens, if a usable profile is available</string>
+    <string name="settings_auto_connect_summary">Start usable profile automatically on launch</string>
     <string name="settings_auto_restart">Restart on Boot</string>
     <string name="settings_auto_restart_summary">Restore the proxy that was running before a reboot or app update</string>
     <string name="settings_theme_title">Appearance &amp; Theme</string>
     <string name="settings_theme_group_color">Color &amp; Theme</string>
     <string name="settings_theme_group_interface">Interface &amp; Effects</string>
     <string name="settings_theme_group_navigation">Navigation</string>
-    <string name="settings_theme_summary">Color, blur effects and interface scale; navigation and gesture options</string>
-    <string name="settings_theme_mode">Theme Mode</string>
+    <string name="settings_theme_summary">Color, blur, scale and gestures</string>
     <string name="settings_theme_system">Follow System</string>
     <string name="settings_theme_light">Light</string>
     <string name="settings_theme_dark">Dark</string>
     <string name="settings_theme_monet">Monet Colors</string>
     <string name="settings_theme_monet_summary">Use the system dynamic color palette when available</string>
     <string name="settings_theme_blur">Blur Effects</string>
-    <string name="settings_theme_blur_summary">Enable blur effects for bars and layered surfaces</string>
+    <string name="settings_theme_blur_summary">Blur top and bottom bars</string>
     <string name="settings_theme_blur_style">Top bar blur style</string>
     <string name="settings_theme_blur_style_gaussian">Gaussian</string>
     <string name="settings_theme_blur_style_progressive">Progressive</string>
     <string name="settings_theme_blur_style_gaussian_summary">Uniform frosted blur across the top bar</string>
     <string name="settings_theme_blur_style_progressive_summary">Gradient blur, strongest at the top edge</string>
     <string name="settings_theme_density_scale">Interface Scale</string>
-    <string name="settings_theme_density_scale_summary">Adjust the global display scale (80% - 110%)</string>
+    <string name="settings_theme_density_scale_summary">Global display scale (80% - 110%)</string>
     <string name="settings_theme_floating_bottom_bar_style">Floating Bottom Bar Style</string>
     <string name="settings_theme_floating_bottom_bar_style_glass">Glass</string>
     <string name="settings_theme_floating_bottom_bar_style_ios_like">iOS-like (Liquid Glass)</string>
@@ -388,10 +415,11 @@
     <string name="settings_predictive_back">Predictive Back Gesture</string>
     <string name="settings_predictive_back_summary">Enable predictive back animation</string>
     <string name="settings_swipe_dismiss">Swipe Back Gesture</string>
-    <string name="settings_swipe_dismiss_summary">Swipe sideways anywhere on the page to go back</string>
+    <string name="settings_swipe_dismiss_summary">Swipe sideways anywhere to go back</string>
     <string name="settings_hide_task_card">Hide from recents</string>
     <string name="settings_hide_task_card_summary">Hide task card in recent tasks</string>
     <string name="settings_about">About</string>
+    <string name="settings_select_item_hint">Select a setting</string>
 
     <!-- VPN Settings -->
     <string name="vpn_settings_title">VPN Settings</string>
@@ -424,9 +452,9 @@
     <string name="root_tether_tproxy_unavailable_warning">Kernel lacks xt_TPROXY module. Running in fallback path (slower, connections still work). Use a kernel with xt_TPROXY for native TPROXY performance.</string>
     <string name="root_tproxy_tether_note">TPROXY mode proxies all hotspot traffic via kernel rules; no Bypass/Through toggle needed.</string>
     <string name="root_tun_jumbo_mtu_title">Jumbo MTU &amp; GSO</string>
-    <string name="root_tun_jumbo_mtu_summary">Large-packet aggregation (mtu=9000, gso=on) reduces per-packet syscalls for throughput. Disable if the upstream link drops fragmented traffic.</string>
+    <string name="root_tun_jumbo_mtu_summary">mtu=9000 with GSO for throughput; disable if fragments drop</string>
     <string name="root_attach_force_reapply_title">Force re-apply on reconnect</string>
-    <string name="root_attach_force_reapply_summary">Diagnostic: re-apply iptables rules every time the app reattaches to a running mihomo. Leave off unless tether rules disappear after reconnect.</string>
+    <string name="root_attach_force_reapply_summary">Rebuild iptables rules on reattach (only if tether rules drop)</string>
 
     <!-- Network Settings -->
     <string name="network_settings_title">Override Settings</string>
@@ -451,7 +479,6 @@
     <string name="network_dns_default_nameserver">Default Nameserver</string>
     <string name="network_dns_fakeip_filter">FakeIP Filter</string>
     <string name="network_port_label">Port (0-65535)</string>
-    <string name="network_port_zero_hint">0 disables this listener</string>
     <string name="network_input_value">Input value</string>
     <string name="network_one_per_line">One per line</string>
     <string name="settings_override_restart_hint">Changes to these settings take effect after restarting the proxy service.</string>
@@ -464,12 +491,12 @@
     <string name="wifi_policy_notify_switch">Switch notifications</string>
     <string name="wifi_policy_notify_switch_summary">Notify only when Wi-Fi policy changes proxy state</string>
     <string name="wifi_policy_hide_monitor_notification">Hide waiting notification</string>
-    <string name="wifi_policy_hide_monitor_notification_summary">Optional. Hiding the monitor notification may reduce background auto-restore reliability.</string>
+    <string name="wifi_policy_hide_monitor_notification_summary">May reduce background auto-restore reliability</string>
     <string name="wifi_policy_action">When matched</string>
     <string name="wifi_policy_action_stop">Stop service</string>
     <string name="wifi_policy_action_stop_summary">Stop proxy on matched Wi-Fi, restart after disconnecting</string>
     <string name="wifi_policy_action_direct">Direct mode</string>
-    <string name="wifi_policy_action_direct_summary">Switch the running proxy to Direct mode without restarting</string>
+    <string name="wifi_policy_action_direct_summary">Switch running proxy to Direct mode directly</string>
     <string name="wifi_policy_ssids_title">Wi-Fi Names</string>
     <string name="wifi_policy_ssid_add_placeholder">Wi-Fi name</string>
     <string name="wifi_policy_ssid_add">Add SSID</string>
@@ -563,7 +590,7 @@
     <string name="backup_stop_proxy_first">Stop the proxy before restoring</string>
     <string name="backup_failed">Operation failed: %1$s</string>
     <string name="backup_restore_confirm_title">Restore backup</string>
-    <string name="backup_restore_confirm_summary">Local subscriptions and settings will be overwritten by the server backup. This cannot be undone. Continue?</string>
+    <string name="backup_restore_confirm_summary">Local profiles and settings will be overwritten. This cannot be undone.</string>
     <string name="backup_restore_done_title">Restore completed</string>
     <string name="backup_restore_done_summary">The app needs to restart to load the restored data.</string>
     <string name="backup_restart_now">Restart now</string>

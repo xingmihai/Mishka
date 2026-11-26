@@ -1,12 +1,16 @@
 package top.yukonga.mishka
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.IntSize
 import top.yukonga.mishka.platform.BootStartManager
 import top.yukonga.mishka.platform.FilePicker
 import top.yukonga.mishka.platform.PlatformStorage
@@ -16,6 +20,7 @@ import top.yukonga.mishka.ui.component.blur.LocalTopBarBlurStyle
 import top.yukonga.mishka.ui.navigation.AppNavigation
 import top.yukonga.mishka.ui.theme.LocalAppDarkMode
 import top.yukonga.mishka.ui.theme.LocalAppMonetEnabled
+import top.yukonga.mishka.ui.theme.LocalContainerSize
 import top.yukonga.mishka.ui.theme.LocalPlatformDensity
 import top.yukonga.mishka.ui.theme.ThemeAccentColor
 import top.yukonga.mishka.ui.theme.ThemeConfig
@@ -120,46 +125,50 @@ fun App(
                 fontScale = currentDensity.fontScale,
             )
         }
-        CompositionLocalProvider(
-            LocalAppDarkMode provides isDark,
-            LocalAppMonetEnabled provides themeConfig.useMonet,
-            LocalPlatformDensity provides currentDensity,
-            LocalDensity provides appDensity,
-            LocalBlurEnabled provides themeConfig.blurEnabled,
-            LocalTopBarBlurStyle provides themeConfig.topBarBlurStyle,
-            LocalContentColor provides MiuixTheme.colorScheme.onBackground,
-        ) {
-            AppNavigation(
-                themeConfig = themeConfig,
-                onThemeConfigChange = onThemeConfigChange,
-                homeViewModel = homeViewModel,
-                subscriptionViewModel = subscriptionViewModel,
-                overrideProfileViewModel = overrideProfileViewModel,
-                proxyViewModel = proxyViewModel,
-                logViewModel = logViewModel,
-                providerViewModel = providerViewModel,
-                connectionViewModel = connectionViewModel,
-                dnsQueryViewModel = dnsQueryViewModel,
-                networkSettingsViewModel = networkSettingsViewModel,
-                metaSettingsViewModel = metaSettingsViewModel,
-                externalControlViewModel = externalControlViewModel,
-                automationViewModel = automationViewModel,
-                appProxyViewModel = appProxyViewModel,
-                filePicker = filePicker,
-                storage = storage,
-                bootStartManager = bootStartManager,
-                mihomoVersion = mihomoVersion,
-                onScanQR = onScanQR,
-                wifiPolicyController = wifiPolicyController,
-                onRequestWifiPermission = onRequestWifiPermission,
-                onPredictiveBackChange = onPredictiveBackChange,
-                onHideTaskCardChange = onHideTaskCardChange,
-                hasRootPermission = hasRootPermission,
-                deepLinkImport = deepLinkImport,
-                onDeepLinkImportConsumed = onDeepLinkImportConsumed,
-                backupViewModel = backupViewModel,
-                onRestartApp = onRestartApp,
-            )
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val containerSize = IntSize(constraints.maxWidth, constraints.maxHeight)
+            CompositionLocalProvider(
+                LocalAppDarkMode provides isDark,
+                LocalAppMonetEnabled provides themeConfig.useMonet,
+                LocalPlatformDensity provides currentDensity,
+                LocalDensity provides appDensity,
+                LocalContainerSize provides containerSize,
+                LocalBlurEnabled provides themeConfig.blurEnabled,
+                LocalTopBarBlurStyle provides themeConfig.topBarBlurStyle,
+                LocalContentColor provides MiuixTheme.colorScheme.onBackground,
+            ) {
+                AppNavigation(
+                    themeConfig = themeConfig,
+                    onThemeConfigChange = onThemeConfigChange,
+                    homeViewModel = homeViewModel,
+                    subscriptionViewModel = subscriptionViewModel,
+                    overrideProfileViewModel = overrideProfileViewModel,
+                    proxyViewModel = proxyViewModel,
+                    logViewModel = logViewModel,
+                    providerViewModel = providerViewModel,
+                    connectionViewModel = connectionViewModel,
+                    dnsQueryViewModel = dnsQueryViewModel,
+                    networkSettingsViewModel = networkSettingsViewModel,
+                    metaSettingsViewModel = metaSettingsViewModel,
+                    externalControlViewModel = externalControlViewModel,
+                    automationViewModel = automationViewModel,
+                    appProxyViewModel = appProxyViewModel,
+                    filePicker = filePicker,
+                    storage = storage,
+                    bootStartManager = bootStartManager,
+                    mihomoVersion = mihomoVersion,
+                    onScanQR = onScanQR,
+                    wifiPolicyController = wifiPolicyController,
+                    onRequestWifiPermission = onRequestWifiPermission,
+                    onPredictiveBackChange = onPredictiveBackChange,
+                    onHideTaskCardChange = onHideTaskCardChange,
+                    hasRootPermission = hasRootPermission,
+                    deepLinkImport = deepLinkImport,
+                    onDeepLinkImportConsumed = onDeepLinkImportConsumed,
+                    backupViewModel = backupViewModel,
+                    onRestartApp = onRestartApp,
+                )
+            }
         }
     }
 }

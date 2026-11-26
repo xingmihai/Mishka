@@ -46,15 +46,15 @@ import top.yukonga.mishka.viewmodel.MemorySnapshot
 import top.yukonga.mishka.viewmodel.ProviderTrafficInfo
 import top.yukonga.mishka.viewmodel.SystemInfoSnapshot
 import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.glass.GlassBottomSheet
+import top.yukonga.miuix.kmp.glass.GlassCard
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Close
-import top.yukonga.miuix.kmp.icon.extended.Refresh
+import top.yukonga.miuix.kmp.icon.glass.Close
+import top.yukonga.miuix.kmp.icon.glass.Refresh
 import top.yukonga.miuix.kmp.squircle.squircleBackground
 import top.yukonga.miuix.kmp.theme.LocalDismissState
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -67,74 +67,82 @@ fun LazyListScope.systemCardsSection(
     systemInfo: SystemInfoSnapshot = SystemInfoSnapshot(),
 ) {
     item(key = "system_cards") {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp)
-                .padding(vertical = 6.dp)
-                .height(IntrinsicSize.Min),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Card(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight(),
-                insideMargin = PaddingValues(16.dp),
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "IP",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MiuixTheme.colorScheme.onSurface,
-                    )
-                    BadgeLabel(
-                        when (systemInfo.addressType) {
-                            NetworkAddressType.Unknown -> "--"
-                            NetworkAddressType.Tun -> "TUN"
-                            NetworkAddressType.Lan -> "LAN"
-                            NetworkAddressType.Wan -> "WAN"
-                        },
-                    )
-                }
-                InfoRow(stringResource(R.string.home_address), systemInfo.localIp, Modifier.padding(top = 8.dp))
-                InfoRow(stringResource(R.string.home_interface), systemInfo.interfaceName, Modifier.padding(top = 4.dp))
-            }
+        SystemCardsContent(memory = memory, systemInfo = systemInfo)
+    }
+}
 
-            Card(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight(),
-                insideMargin = PaddingValues(16.dp),
+@Composable
+internal fun SystemCardsContent(
+    memory: MemorySnapshot = MemorySnapshot(),
+    systemInfo: SystemInfoSnapshot = SystemInfoSnapshot(),
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(LocalHomeCardHorizontalPadding.current)
+            .padding(vertical = 6.dp)
+            .height(IntrinsicSize.Min),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Card(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight(),
+            insideMargin = PaddingValues(16.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(R.string.home_system),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MiuixTheme.colorScheme.onSurface,
-                    )
-                    BadgeLabel("SYS")
-                }
-                InfoRow(
-                    "CPU",
-                    systemInfo.cpuUsage,
-                    Modifier.padding(top = 8.dp),
+                Text(
+                    text = "IP",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MiuixTheme.colorScheme.onSurface,
                 )
-                InfoRow(
-                    "RAM",
-                    memory.ramUsage,
-                    Modifier.padding(top = 4.dp),
+                BadgeLabel(
+                    when (systemInfo.addressType) {
+                        NetworkAddressType.Unknown -> "--"
+                        NetworkAddressType.Tun -> "TUN"
+                        NetworkAddressType.Lan -> "LAN"
+                        NetworkAddressType.Wan -> "WAN"
+                    },
                 )
             }
+            InfoRow(stringResource(R.string.home_address), systemInfo.localIp, Modifier.padding(top = 8.dp))
+            InfoRow(stringResource(R.string.home_interface), systemInfo.interfaceName, Modifier.padding(top = 4.dp))
+        }
+
+        Card(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight(),
+            insideMargin = PaddingValues(16.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(R.string.home_system),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MiuixTheme.colorScheme.onSurface,
+                )
+                BadgeLabel("SYS")
+            }
+            InfoRow(
+                "CPU",
+                systemInfo.cpuUsage,
+                Modifier.padding(top = 8.dp),
+            )
+            InfoRow(
+                "RAM",
+                memory.ramUsage,
+                Modifier.padding(top = 4.dp),
+            )
         }
     }
 }
@@ -157,7 +165,7 @@ internal fun SubscriptionTrafficDialog(
             // 打开弹窗时已自动 GET 重读快照；此按钮触发真实更新（会消耗订阅服务器配额）
             IconButton(onClick = onUpdateAll, enabled = !isLoading) {
                 Icon(
-                    imageVector = MiuixIcons.Refresh,
+                    imageVector = MiuixIcons.Glass.Refresh,
                     contentDescription = stringResource(R.string.home_provider_update_all),
                     tint = MiuixTheme.colorScheme.onBackground,
                 )
@@ -167,16 +175,17 @@ internal fun SubscriptionTrafficDialog(
             val dismiss = LocalDismissState.current
             IconButton(onClick = { dismiss?.invoke() }) {
                 Icon(
-                    imageVector = MiuixIcons.Close,
+                    imageVector = MiuixIcons.Glass.Close,
                     contentDescription = stringResource(R.string.common_close),
                     tint = MiuixTheme.colorScheme.onBackground,
                 )
             }
         },
-    ) {
+    ) { innerPadding ->
         Box(
             modifier = Modifier
                 .fillMaxWidth()
+                .padding(innerPadding)
                 .sheetContentSafePadding()
                 .heightIn(min = 200.dp)
                 .sheetHeightTransition(),
@@ -322,19 +331,14 @@ private fun TrafficDetailPanel(
     total: String,
     expire: String,
 ) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth(),
+    GlassCard(
+        modifier = Modifier.fillMaxWidth(),
         cornerRadius = 12.dp,
         insideMargin = PaddingValues(
             start = 12.dp,
             top = 12.dp,
             end = 12.dp,
             bottom = 14.dp,
-        ),
-        colors = CardDefaults.defaultColors(
-            // onSurface 低透明度叠加在 sheet 背景上，深浅色均得到轻微对比的面板底色
-            color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.04f),
         ),
     ) {
         Column(

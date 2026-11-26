@@ -32,6 +32,7 @@ import top.yukonga.mishka.platform.NetworkAddressType
 import top.yukonga.mishka.platform.PlatformSystemInfo
 import top.yukonga.mishka.platform.ProxyServiceController
 import top.yukonga.mishka.platform.ProxyState
+import top.yukonga.mishka.platform.StartupProgress
 import top.yukonga.mishka.platform.TunMode
 import top.yukonga.mishka.platform.showToast
 import top.yukonga.mishka.util.FormatUtils
@@ -45,6 +46,7 @@ data class HomeUiState(
     val isRunning: Boolean = false,
     val isStarting: Boolean = false,
     val isStopping: Boolean = false,
+    val isRestarting: Boolean = false,
     val mode: String = "--",
     val tunStack: String = "",
     val tunMode: TunMode = TunMode.Vpn,
@@ -54,7 +56,7 @@ data class HomeUiState(
     val providerTraffic: ImmutableList<ProviderTrafficInfo> = persistentListOf(),
     val isProviderTrafficLoading: Boolean = false,
     val providerTrafficLoadFailed: Boolean = false,
-    val latencyBaidu: Int = -1,
+    val latencyXiaomi: Int = -1,
     val latencyCloudflare: Int = -1,
     val latencyGoogle: Int = -1,
     val latencyGithub: Int = -1,
@@ -110,7 +112,7 @@ data class SpeedSnapshot(
  * 而非 api.github.com，是为了让规则匹配与用户实际访问 GitHub 时命中同一条规则。
  */
 enum class LatencyProbe(val url: String) {
-    Baidu("http://www.baidu.com"),
+    Xiaomi("http://connect.rom.miui.com/generate_204"),
     Cloudflare("http://www.cloudflare.com/cdn-cgi/trace"),
     Google("http://www.google.com/generate_204"),
     Github("http://github.com"),
@@ -171,6 +173,7 @@ class HomeViewModel(
     // 秒；-1 表示尚未启动/已重置（UI 层格式化时转为空串）
     private val _uptimeState = MutableStateFlow(-1L)
     val uptimeState: StateFlow<Long> = _uptimeState.asStateFlow()
+    val startupProgress: StateFlow<StartupProgress?> = serviceController.startupProgress
 
     // 折线图的滑动窗口缓冲，仅在 viewModelScope(Main) 的 traffic collect 内访问，无需加锁
     private val upHistory = ArrayDeque<Long>(TRAFFIC_HISTORY_CAPACITY)
@@ -214,6 +217,7 @@ class HomeViewModel(
                 when (status.state) {
                     ProxyState.Starting -> {
                         _uiState.value = _uiState.value.copy(
+                            isRunning = false,
                             isStarting = true,
                             isStopping = false,
                             tunMode = status.tunMode,
@@ -224,6 +228,8 @@ class HomeViewModel(
                     ProxyState.Running -> {
                         _uiState.value = _uiState.value.copy(
                             isStarting = false,
+                            isStopping = false,
+                            isRestarting = false,
                             isRunning = true,
                             tunMode = status.tunMode,
                             subscription = activeSubscriptionInfo(),
@@ -233,7 +239,11 @@ class HomeViewModel(
                     }
 
                     ProxyState.Stopping -> {
-                        _uiState.value = _uiState.value.copy(isRunning = false, isStopping = true)
+                        _uiState.value = _uiState.value.copy(
+                            isRunning = false,
+                            isStarting = false,
+                            isStopping = true,
+                        )
                     }
 
                     ProxyState.Stopped -> {
@@ -679,6 +689,7 @@ class HomeViewModel(
     }
 
     fun restartProxy() {
+        _uiState.update { it.copy(isRestarting = true) }
         serviceController.restart(getActiveSubscriptionId())
     }
 
@@ -770,7 +781,7 @@ class HomeViewModel(
     private fun applyLatency(probe: LatencyProbe, delay: Int) {
         _uiState.update {
             when (probe) {
-                LatencyProbe.Baidu -> it.copy(latencyBaidu = delay)
+                LatencyProbe.Xiaomi -> it.copy(latencyXiaomi = delay)
                 LatencyProbe.Cloudflare -> it.copy(latencyCloudflare = delay)
                 LatencyProbe.Google -> it.copy(latencyGoogle = delay)
                 LatencyProbe.Github -> it.copy(latencyGithub = delay)

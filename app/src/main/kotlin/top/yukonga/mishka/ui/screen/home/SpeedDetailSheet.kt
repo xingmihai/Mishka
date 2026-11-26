@@ -29,15 +29,14 @@ import top.yukonga.mishka.ui.util.sheetContentSafePadding
 import top.yukonga.mishka.ui.util.sheetHeightTransition
 import top.yukonga.mishka.util.FormatUtils
 import top.yukonga.mishka.viewmodel.ConnectionRate
-import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.glass.GlassBottomSheet
+import top.yukonga.miuix.kmp.glass.GlassCard
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Close
+import top.yukonga.miuix.kmp.icon.glass.Close
 import top.yukonga.miuix.kmp.theme.LocalDismissState
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -61,16 +60,17 @@ internal fun SpeedDetailSheet(
             val dismiss = LocalDismissState.current
             IconButton(onClick = { dismiss?.invoke() }) {
                 Icon(
-                    imageVector = MiuixIcons.Close,
+                    imageVector = MiuixIcons.Glass.Close,
                     contentDescription = stringResource(R.string.common_close),
                     tint = MiuixTheme.colorScheme.onBackground,
                 )
             }
         },
-    ) {
+    ) { innerPadding ->
         Box(
             modifier = Modifier
                 .fillMaxWidth()
+                .padding(innerPadding)
                 .sheetContentSafePadding()
                 .heightIn(min = 200.dp)
                 .sheetHeightTransition(),
@@ -107,13 +107,10 @@ internal fun SpeedDetailSheet(
 
 @Composable
 private fun ConnectionRateCard(rate: ConnectionRate, modifier: Modifier = Modifier) {
-    Card(
+    GlassCard(
         modifier = modifier.fillMaxWidth(),
         cornerRadius = 12.dp,
         insideMargin = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
-        colors = CardDefaults.defaultColors(
-            color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.04f),
-        ),
     ) {
         Text(
             text = rate.host,

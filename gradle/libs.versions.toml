@@ -1,8 +1,9 @@
 [versions]
-agp = "9.5.1"
+agp = "9.5.2"
 androidx-activity = "1.13.0"
 androidx-benchmark = "1.5.0"
-androidx-lifecycle = "2.11.0"
+androidx-compose-ui-tooling = "1.13.0"
+androidx-lifecycle = "2.11.1"
 androidx-navigationevent = "1.2.0"
 androidx-profileinstaller = "1.4.1"
 androidx-splashscreen = "1.2.0"
@@ -15,10 +16,9 @@ kotlinx-collections-immutable = "0.5.2"
 kotlinx-coroutines = "1.11.0"
 kotlinx-datetime = "0.8.0"
 kotlinx-serialization = "1.13.0"
-ksp = "2.3.9"
+ksp = "2.3.13"
 ktor = "3.6.1"
-material-icons-extended = "1.7.8"
-miuix = "0.9.5-beta01"
+miuix = "0.9.5-rc01"
 quickie = "1.12.0"
 room3 = "3.0.3"
 sqlite = "2.7.1"
@@ -26,6 +26,8 @@ sqlite = "2.7.1"
 [libraries]
 androidx-activity = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity" }
 androidx-benchmark-macro-junit4 = { module = "androidx.benchmark:benchmark-macro-junit4", version.ref = "androidx-benchmark" }
+androidx-compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling", version.ref = "androidx-compose-ui-tooling" }
+androidx-compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview", version.ref = "androidx-compose-ui-tooling" }
 androidx-core-splashscreen = { module = "androidx.core:core-splashscreen", version.ref = "androidx-splashscreen" }
 androidx-lifecycle-runtime = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "androidx-lifecycle" }
 androidx-lifecycle-viewmodel = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "androidx-lifecycle" }
@@ -49,11 +51,9 @@ ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
 ktor-client-websockets = { module = "io.ktor:ktor-client-websockets", version.ref = "ktor" }
 ktor-serialization-json = { module = "io.ktor:ktor-serialization-kotlinx-json", version.ref = "ktor" }
-material-icons-extended = { module = "androidx.compose.material:material-icons-extended", version.ref = "material-icons-extended" }
 miuix-blur = { module = "top.yukonga.miuix.kmp:miuix-blur-android", version.ref = "miuix" }
 miuix-glass = { module = "top.yukonga.miuix.kmp:miuix-glass-android", version.ref = "miuix" }
 miuix-glass-icons = { module = "top.yukonga.miuix.kmp:miuix-glass-icons-android", version.ref = "miuix" }
-miuix-icons = { module = "top.yukonga.miuix.kmp:miuix-icons-android", version.ref = "miuix" }
 miuix-material = { module = "top.yukonga.miuix.kmp:miuix-material-android", version.ref = "miuix" }
 miuix-nav = { module = "top.yukonga.miuix.kmp:miuix-nav-android", version.ref = "miuix" }
 miuix-preference = { module = "top.yukonga.miuix.kmp:miuix-preference-android", version.ref = "miuix" }
@@ -67,7 +67,7 @@ baselineprofile = ["androidx-benchmark-macro-junit4", "androidx-test-junit", "an
 koin = ["koin-android", "koin-core"]
 kotlinx = ["kotlinx-collections-immutable", "kotlinx-coroutines-core", "kotlinx-datetime", "kotlinx-serialization-json"]
 ktor = ["ktor-client-content-negotiation", "ktor-client-core", "ktor-client-okhttp", "ktor-client-websockets", "ktor-serialization-json"]
-miuix = ["miuix-blur", "miuix-glass", "miuix-glass-icons", "miuix-icons", "miuix-material", "miuix-nav", "miuix-preference", "miuix-ui"]
+miuix = ["miuix-blur", "miuix-glass", "miuix-glass-icons", "miuix-material", "miuix-nav", "miuix-preference", "miuix-ui"]
 room = ["androidx-room3-runtime", "androidx-sqlite-bundled"]
 
 [plugins]

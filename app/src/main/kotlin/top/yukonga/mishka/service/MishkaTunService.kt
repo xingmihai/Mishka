@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.net.VpnService
 import android.os.ParcelFileDescriptor
+import android.os.PowerManager
 import android.system.Os
 import android.system.OsConstants
 import android.util.Log
@@ -17,6 +18,7 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 import top.yukonga.mishka.MishkaApplication
@@ -30,8 +32,11 @@ import top.yukonga.mishka.platform.ProxyServiceBridge
 import top.yukonga.mishka.platform.ProxyServiceController
 import top.yukonga.mishka.platform.ProxyServiceStatus
 import top.yukonga.mishka.platform.ProxyState
+import top.yukonga.mishka.platform.StartupProgress
+import top.yukonga.mishka.platform.StartupStep
 import top.yukonga.mishka.platform.StorageKeys
 import top.yukonga.mishka.platform.TunMode
+import top.yukonga.mishka.service.TransitionWakeLock.releaseQuietly
 import top.yukonga.mishka.util.describe
 import java.io.File
 import kotlin.time.Clock
@@ -61,6 +66,9 @@ class MishkaTunService : VpnService() {
     private var foregroundReady = false
     private var monitorJob: Job? = null
     private var notificationRefreshJob: Job? = null
+    // 本 Service 实例已完成过一次 ROOT 残留清理（或非 ROOT 设备无需清理）；
+    // VPN → VPN 重启无需反复跑 4 轮 su，新鲜启动仍按 hadRootPid || hasRoot 完整清理。
+    private var rootCleanupDone = false
 
     private data class VpnCommand(
         val action: String,
@@ -68,10 +76,11 @@ class MishkaTunService : VpnService() {
         val startId: Int = 0,
         val generation: Long = -1,
         val error: String? = null,
+        val wakeLock: PowerManager.WakeLock? = null,
     )
 
     // START 只启动可取消任务；STOP/RESTART 在同一个消费方等待它收敛，不能各自并发清理 fd。
-    private val commands = Channel<VpnCommand>(Channel.UNLIMITED)
+    private val commands = Channel<VpnCommand>(Channel.UNLIMITED) { it.wakeLock.releaseQuietly() }
     private var startJob: Job? = null
     private var generation = 0L
     private var activeStartId = 0
@@ -119,6 +128,8 @@ class MishkaTunService : VpnService() {
                         ProxyServiceStatus(ProxyState.Error, errorMessage = e.describe(), tunMode = TunMode.Vpn)
                     )
                     if (command.startId > 0) stopSelfResult(command.startId) else stopSelf()
+                } finally {
+                    command.wakeLock.releaseQuietly()
                 }
             }
         }
@@ -138,21 +149,41 @@ class MishkaTunService : VpnService() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (!foregroundReady) return START_NOT_STICKY
+        if (!foregroundReady) {
+            TransitionWakeLock.releaseHandoff(intent)
+            return START_NOT_STICKY
+        }
         latestStartId = startId
-        when (intent?.action) {
-            ACTION_START, ACTION_STOP, ACTION_RESTART -> commands.trySend(
-                VpnCommand(
+        try {
+            val command = when (intent?.action) {
+                ACTION_START, ACTION_STOP, ACTION_RESTART -> VpnCommand(
                     action = requireNotNull(intent.action),
                     subscriptionId = intent.getStringExtra(ProxyServiceController.EXTRA_SUBSCRIPTION_ID),
                     startId = startId,
+                    wakeLock = TransitionWakeLock.acquire(
+                        this,
+                        WAKELOCK_TAG_COMMAND,
+                        TransitionWakeLock.SERVICE_COMMAND_TIMEOUT_MS,
+                    ),
                 )
-            )
 
-            null, SERVICE_INTERFACE -> {
-                // 校验也在前驱收敛后执行，不能从新实例的主线程覆盖旧实例状态。
-                commands.trySend(VpnCommand(ACTION_START, startId = startId))
+                null, SERVICE_INTERFACE -> VpnCommand(
+                    action = ACTION_START,
+                    startId = startId,
+                    wakeLock = TransitionWakeLock.acquire(
+                        this,
+                        WAKELOCK_TAG_COMMAND,
+                        TransitionWakeLock.SERVICE_COMMAND_TIMEOUT_MS,
+                    ),
+                )
+
+                else -> null
             }
+            if (command != null && commands.trySend(command).isFailure) {
+                command.wakeLock.releaseQuietly()
+            }
+        } finally {
+            TransitionWakeLock.releaseHandoff(intent)
         }
         return START_STICKY
     }
@@ -165,21 +196,30 @@ class MishkaTunService : VpnService() {
             return
         }
         val runGeneration = ++generation
-        startJob = scope.launch {
+        val startWakeLock = TransitionWakeLock.acquire(
+            this,
+            WAKELOCK_TAG_START,
+            TransitionWakeLock.SERVICE_START_TIMEOUT_MS,
+        )
+        val job = scope.launch {
             var started = false
             val storage = PlatformStorage(this@MishkaTunService)
             try {
                 if (!ProfileFileOps.hasValidConfig(this@MishkaTunService, subscriptionId)) {
                     throw IllegalStateException(getString(R.string.error_no_active_profile))
                 }
-                ProxyServiceBridge.updateState(ProxyServiceStatus(ProxyState.Starting, tunMode = TunMode.Vpn))
+                ProxyServiceBridge.updateState(
+                    ProxyServiceStatus(ProxyState.Starting, tunMode = TunMode.Vpn),
+                    StartupProgress(StartupStep.Preparing),
+                )
                 runner.stop()
                 closeVpnResources()
 
                 // ROOT 孤儿仍可能持有路由；切回 VPN 前保留既有清理和缓存回写。
                 val hadRootPid = storage.getString(StorageKeys.ROOT_MIHOMO_PID, "").isNotEmpty()
                 val hasRoot = storage.getString(StorageKeys.HAS_ROOT, "false") == "true"
-                if (hadRootPid || hasRoot) {
+                if (hadRootPid || (hasRoot && !rootCleanupDone)) {
+                    ProxyServiceBridge.updateStartupProgress(StartupProgress(StartupStep.CleaningUp))
                     val residualTun = storage.getString(StorageKeys.ROOT_TUN_DEVICE, RuntimeOverrideBuilder.DEFAULT_TUN_DEVICE)
                     RootHelper.cleanupOrphanedMihomo(tunDevice = residualTun)
                     RootTetherHijacker.teardown()
@@ -189,8 +229,10 @@ class MishkaTunService : VpnService() {
                     storage.putString(StorageKeys.ROOT_MIHOMO_PID, "")
                     storage.putString(StorageKeys.ROOT_MIHOMO_SECRET, "")
                     storage.putString(StorageKeys.ROOT_ACTIVE_SUBSCRIPTION_ID, "")
+                    rootCleanupDone = true
                 }
 
+                ProxyServiceBridge.updateStartupProgress(StartupProgress(StartupStep.Preparing))
                 val userOverride = overrideStore.load()
                 val viaProxy = storage.getString(StorageKeys.SUBSCRIPTION_UPDATE_VIA_PROXY, "true") == "true"
                 val transformPlan = prepareRuntimeTransform(
@@ -220,6 +262,7 @@ class MishkaTunService : VpnService() {
                     }
                 } else null
 
+                ProxyServiceBridge.updateStartupProgress(StartupProgress(StartupStep.EstablishingVpn))
                 tunFd = establishVpn(storage, ipv6, proxyAddress)
                     ?: throw IllegalStateException(getString(R.string.error_vpn_denied))
                 ensureActive()
@@ -238,6 +281,7 @@ class MishkaTunService : VpnService() {
                     add("${RuntimeOverrideBuilder.VPN_GATEWAY}/${RuntimeOverrideBuilder.VPN_PREFIX}")
                     if (ipv6) add("${RuntimeOverrideBuilder.VPN_GATEWAY6}/${RuntimeOverrideBuilder.VPN_PREFIX6}")
                 }.joinToString(",")
+                ProxyServiceBridge.updateStartupProgress(StartupProgress(StartupStep.StartingCore))
                 val success = runner.start(
                     subscriptionId = subscriptionId,
                     useRoot = false,
@@ -250,6 +294,9 @@ class MishkaTunService : VpnService() {
                     vpnGateway = gateway,
                     vpnHttpFd = httpListenerFd,
                     vpnPlatformSocket = requireNotNull(platformBridge).socketName,
+                    onStartupProgress = { progress ->
+                        if (isActive) ProxyServiceBridge.updateStartupProgress(progress)
+                    },
                 )
                 if (!success) throw IllegalStateException(runner.errorMessage.ifBlank { getString(R.string.error_start_failed) })
                 ensureActive()
@@ -301,6 +348,8 @@ class MishkaTunService : VpnService() {
                 }
             }
         }
+        job.invokeOnCompletion { startWakeLock.releaseQuietly() }
+        startJob = job
     }
 
     private fun establishVpn(
@@ -458,7 +507,7 @@ class MishkaTunService : VpnService() {
         synchronized(lifecycleLock) { destroyed = true }
         foregroundReady = false
         val serviceJob = scope.coroutineContext[Job]
-        commands.close()
+        commands.cancel()
         scope.cancel()
         dynamicNotification.stop()
         // 后继实例必须等待这一代完成收尾，不能在旧核心仍占端口/持 fd 时 fork 新核心。
@@ -505,6 +554,8 @@ class MishkaTunService : VpnService() {
         const val ACTION_STOP = "top.yukonga.mishka.STOP"
         const val ACTION_RESTART = "top.yukonga.mishka.RESTART"
         private const val ACTION_DIED = "process-died"
+        private const val WAKELOCK_TAG_COMMAND = "mishka:vpn-command"
+        private const val WAKELOCK_TAG_START = "mishka:vpn-start"
 
         private val HTTP_PROXY_LOCAL_LIST = listOf(
             "localhost", "*.local", "127.*", "10.*", "172.16.*",

@@ -3,9 +3,10 @@ package top.yukonga.mishka.ui.component
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.computedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -22,8 +23,12 @@ import androidx.compose.ui.unit.offset
 import top.yukonga.mishka.R
 import top.yukonga.mishka.ui.component.blur.LocalBlurEnabled
 import top.yukonga.mishka.ui.component.blur.LocalTopAppBarBackdrop
+import top.yukonga.mishka.ui.component.blur.LocalTopAppBarCenterObstructionStart
 import top.yukonga.mishka.ui.component.blur.LocalTopAppBarTitleAlpha
+import top.yukonga.mishka.ui.component.blur.LocalTopBarExtraTopInset
 import top.yukonga.mishka.ui.component.blur.LocalTopBarStartInset
+import top.yukonga.mishka.ui.util.LocalHorizontalCutoutSides
+import top.yukonga.mishka.ui.util.horizontalCutoutPadding
 import top.yukonga.mishka.ui.util.rememberIsWideScreen
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.Icon
@@ -51,6 +56,14 @@ private fun Modifier.topBarStartInset(startInset: () -> Dp): Modifier = layout {
     }
 }
 
+private fun Modifier.topBarExtraTopInset(extraTopInset: () -> Dp): Modifier = layout { measurable, constraints ->
+    val extraPx = extraTopInset().roundToPx().coerceAtLeast(0)
+    val placeable = measurable.measure(constraints)
+    layout(placeable.width, placeable.height + extraPx) {
+        placeable.placeRelative(0, extraPx)
+    }
+}
+
 /**
  * 顶栏自适应：手机默认可折叠大标题，宽屏固定小标题；同时根据 [LocalTopBarStyle]
  * 在 [GlassTopAppBar]（默认）与原版 [TopAppBar] / [SmallTopAppBar] 间切换。
@@ -72,27 +85,37 @@ fun AdaptiveTopAppBar(
 ) {
     val backdrop = LocalTopAppBarBackdrop.current
     val barTitleAlpha = LocalTopAppBarTitleAlpha.current
+    val centerObstructionStart = LocalTopAppBarCenterObstructionStart.current
     val startInset = LocalTopBarStartInset.current
+    val extraTopInset = LocalTopBarExtraTopInset.current
+    val horizontalCutoutSides = LocalHorizontalCutoutSides.current
+    val overrideHorizontalInsets = defaultWindowInsetsPadding && horizontalCutoutSides != WindowInsetsSides.Horizontal
     val surfaceColor = MiuixTheme.colorScheme.surface
     val bandBrush = remember(surfaceColor) { GlassTopAppBarDefaults.bandBrush(surfaceColor) }
     val resolvedContentScrolled by remember(scrollBehavior, isContentScrolled) {
-        derivedStateOf {
-            isContentScrolled ?: (scrollBehavior?.state?.let { it.contentOffset < 0f } ?: false)
+        computedStateOf {
+            val overscrolled = scrollBehavior?.state?.let { it.overscrollOffset < -1f } ?: false
+            (isContentScrolled ?: (scrollBehavior?.state?.let { it.contentOffset < -1f } ?: false)) || overscrolled
         }
     }
+    val blurEnabled = LocalBlurEnabled.current
     GlassTopAppBar(
         title = title,
         isContentScrolled = resolvedContentScrolled,
         modifier = modifier,
-        contentModifier = contentModifier.topBarStartInset(startInset),
+        contentModifier = contentModifier
+            .then(if (overrideHorizontalInsets) Modifier.horizontalCutoutPadding(applySidebarInset = false) else Modifier)
+            .topBarExtraTopInset(extraTopInset)
+            .topBarStartInset(startInset),
         expandable = expandable,
-        progressiveBlur = LocalBlurEnabled.current,
+        progressiveBlur = blurEnabled,
         backdrop = backdrop,
         scrollBehavior = scrollBehavior,
         bandBrush = bandBrush,
         bandOverhang = GlassTopAppBarDefaults.BandOverhang,
-        defaultWindowInsetsPadding = defaultWindowInsetsPadding,
+        defaultWindowInsetsPadding = if (overrideHorizontalInsets) false else defaultWindowInsetsPadding,
         titleAlpha = { titleAlpha() * barTitleAlpha() },
+        centerObstructionStart = centerObstructionStart,
         navigationIcon = navigationIcon,
         actions = { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { actions() } },
         bottomContent = bottomContent,

@@ -7,13 +7,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentSize
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,10 +24,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.collections.immutable.persistentListOf
 import top.yukonga.mishka.R
 import top.yukonga.mishka.domain.model.ProfileType
 import top.yukonga.mishka.domain.model.Subscription
@@ -44,6 +46,7 @@ import top.yukonga.mishka.ui.util.horizontalCutoutPadding
 import top.yukonga.mishka.util.FormatUtils
 import top.yukonga.mishka.util.formatEpochMillisAsLocal
 import top.yukonga.mishka.viewmodel.ProfileOperation
+import top.yukonga.mishka.viewmodel.SubscriptionUiState
 import top.yukonga.mishka.viewmodel.SubscriptionViewModel
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
@@ -56,9 +59,9 @@ import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.glass.GlassDialog
 import top.yukonga.miuix.kmp.glass.GlassDialogButtonRole
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Delete
-import top.yukonga.miuix.kmp.icon.extended.MoreCircle
-import top.yukonga.miuix.kmp.icon.extended.Refresh
+import top.yukonga.miuix.kmp.icon.glass.Delete
+import top.yukonga.miuix.kmp.icon.glass.MoreCircle
+import top.yukonga.miuix.kmp.icon.glass.Refresh
 import top.yukonga.miuix.kmp.squircle.squircleBackground
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
@@ -78,8 +81,38 @@ fun SubscriptionScreen(
     onActiveChanged: (() -> Unit)? = null,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val scrollBehavior = MiuixScrollBehavior()
+    SubscriptionScreenContent(
+        uiState = uiState,
+        bottomPadding = bottomPadding,
+        onUpdateAll = { viewModel.updateAllSubscriptions() },
+        onNavigateAdd = { viewModel.clearError(); onNavigateAdd() },
+        onSelect = { id ->
+            if (viewModel.setActive(id)) {
+                onActiveChanged?.invoke()
+            }
+        },
+        onRefresh = { viewModel.fetchSubscription(it) },
+        onDelete = { id ->
+            viewModel.removeSubscription(id) { onActiveChanged?.invoke() }
+        },
+        onEdit = onNavigateEdit,
+        onCancelUpdate = { viewModel.cancelCurrentUpdate() },
+    )
+}
 
+@Composable
+private fun SubscriptionScreenContent(
+    uiState: SubscriptionUiState = SubscriptionUiState(),
+    bottomPadding: Dp = 0.dp,
+    onUpdateAll: () -> Unit = {},
+    onNavigateAdd: () -> Unit = {},
+    onSelect: (String) -> Unit = {},
+    onRefresh: (String) -> Unit = {},
+    onDelete: (String) -> Unit = {},
+    onEdit: (String) -> Unit = {},
+    onCancelUpdate: () -> Unit = {},
+) {
+    val scrollBehavior = MiuixScrollBehavior()
     val backdrop = rememberBlurBackdrop()
     val blurActive = backdrop != null
 
@@ -95,14 +128,14 @@ fun SubscriptionScreen(
                         // 不是订阅地址，用它判空会让「全部更新」可见却点了没反应
                         if (uiState.subscriptions.any { it.type == ProfileType.Url && it.url.isNotBlank() }) {
                             TopBarIconButton(
-                                onClick = { viewModel.updateAllSubscriptions() },
+                                onClick = onUpdateAll,
                                 enabled = !uiState.isLoading,
                                 glassIcon = MiuixIcons.Glass.GlassRefresh,
                                 contentDescription = stringResource(R.string.subscription_update_all),
                             )
                         }
                         TopBarIconButton(
-                            onClick = { viewModel.clearError(); onNavigateAdd() },
+                            onClick = onNavigateAdd,
                             glassIcon = MiuixIcons.Glass.GlassAdd,
                             contentDescription = stringResource(R.string.subscription_add),
                         )
@@ -111,7 +144,8 @@ fun SubscriptionScreen(
             }
         },
     ) { innerPadding ->
-        LazyColumn(
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = 320.dp),
             modifier = Modifier
                 .fillMaxSize()
                 .then(if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier)
@@ -120,23 +154,18 @@ fun SubscriptionScreen(
                 .overScrollVertical(scrollBehavior)
                 .nestedScroll(scrollBehavior.nestedScrollConnection),
             contentPadding = PaddingValues(
-                top = innerPadding.calculateTopPadding(),
-                bottom = bottomPadding,
+                start = 12.dp,
+                end = 12.dp,
+                top = innerPadding.calculateTopPadding() + 12.dp,
+                bottom = bottomPadding + 12.dp,
             ),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (uiState.subscriptions.isNotEmpty()) {
-                item(key = "top_padding") {
-                    Spacer(modifier = Modifier.height(12.dp))
-                }
-            }
-
             if (uiState.error.isNotEmpty()) {
-                item(key = "error") {
+                item(key = "error", span = { GridItemSpan(maxLineSpan) }) {
                     Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp)
-                            .padding(bottom = 12.dp),
+                        modifier = Modifier.fillMaxWidth(),
                         insideMargin = PaddingValues(16.dp),
                     ) {
                         Text(
@@ -148,9 +177,11 @@ fun SubscriptionScreen(
             }
 
             if (uiState.subscriptions.isEmpty()) {
-                item(key = "empty") {
+                item(key = "empty", span = { GridItemSpan(maxLineSpan) }) {
                     Column(
-                        modifier = Modifier.fillParentMaxSize(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 120.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center,
                     ) {
@@ -167,22 +198,18 @@ fun SubscriptionScreen(
                         )
                     }
                 }
-            }
-
-            items(uiState.subscriptions, key = { it.id }) { sub ->
-                SubscriptionItem(
-                    subscription = sub,
-                    isLoading = uiState.isLoading,
-                    onSelect = {
-                        viewModel.setActive(sub.id)
-                        onActiveChanged?.invoke()
-                    },
-                    onRefresh = { viewModel.fetchSubscription(sub.id) },
-                    onDelete = {
-                        viewModel.removeSubscription(sub.id) { onActiveChanged?.invoke() }
-                    },
-                    onEdit = { onNavigateEdit(sub.id) },
-                )
+            } else {
+                items(uiState.subscriptions, key = { it.id }) { sub ->
+                    SubscriptionItem(
+                        subscription = sub,
+                        isLoading = uiState.isLoading,
+                        modifier = Modifier.fillMaxWidth(),
+                        onSelect = { onSelect(sub.id) },
+                        onRefresh = { onRefresh(sub.id) },
+                        onDelete = { onDelete(sub.id) },
+                        onEdit = { onEdit(sub.id) },
+                    )
+                }
             }
         }
     }
@@ -202,7 +229,7 @@ fun SubscriptionScreen(
             show = true,
             step = step,
             title = stringResource(R.string.subscription_updating_title),
-            onCancel = { viewModel.cancelCurrentUpdate() },
+            onCancel = onCancelUpdate,
         )
     } else {
         val title = when (uiState.operation) {
@@ -213,7 +240,7 @@ fun SubscriptionScreen(
             show = uiState.importProgress != null,
             step = uiState.importProgress?.let { importStepLabel(it) } ?: stringResource(R.string.common_processing),
             title = title,
-            onCancel = { viewModel.cancelCurrentUpdate() },
+            onCancel = onCancelUpdate,
         )
     }
 }
@@ -222,6 +249,7 @@ fun SubscriptionScreen(
 private fun SubscriptionItem(
     subscription: Subscription,
     isLoading: Boolean,
+    modifier: Modifier = Modifier,
     onSelect: () -> Unit,
     onRefresh: () -> Unit,
     onDelete: () -> Unit,
@@ -231,10 +259,7 @@ private fun SubscriptionItem(
     val displayName = subscription.name.ifBlank { stringResource(R.string.subscription_config) }
 
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp)
-            .padding(bottom = 12.dp),
+        modifier = modifier,
         insideMargin = PaddingValues(16.dp),
         onClick = onSelect,
         pressFeedbackType = PressFeedbackType.Sink,
@@ -266,10 +291,11 @@ private fun SubscriptionItem(
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-        Row {
-
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Column(
-                modifier = Modifier.wrapContentSize()
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 12.dp),
             ) {
                 if (subscription.total > 0) {
                     val used = subscription.upload + subscription.download
@@ -292,8 +318,6 @@ private fun SubscriptionItem(
                     )
                 }
 
-                Spacer(Modifier.weight(1f))
-
                 if (subscription.updatedAt > 0) {
                     Text(
                         text = stringResource(R.string.subscription_updated_at, formatEpochMillisAsLocal(subscription.updatedAt)),
@@ -304,7 +328,6 @@ private fun SubscriptionItem(
                 }
             }
 
-            Spacer(Modifier.weight(1f))
 
             IconButton(
                 onClick = onEdit,
@@ -314,7 +337,7 @@ private fun SubscriptionItem(
             ) {
                 Icon(
                     modifier = Modifier.size(20.dp),
-                    imageVector = MiuixIcons.MoreCircle,
+                    imageVector = MiuixIcons.Glass.MoreCircle,
                     contentDescription = stringResource(R.string.common_edit),
                     tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                 )
@@ -331,7 +354,7 @@ private fun SubscriptionItem(
                 ) {
                     Icon(
                         modifier = Modifier.size(20.dp),
-                        imageVector = MiuixIcons.Refresh,
+                        imageVector = MiuixIcons.Glass.Refresh,
                         contentDescription = stringResource(R.string.common_update),
                         tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     )
@@ -346,7 +369,7 @@ private fun SubscriptionItem(
             ) {
                 Icon(
                     modifier = Modifier.size(20.dp),
-                    imageVector = MiuixIcons.Delete,
+                    imageVector = MiuixIcons.Glass.Delete,
                     contentDescription = stringResource(R.string.common_delete),
                     tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                 )
@@ -380,5 +403,50 @@ private fun SubscriptionItem(
                 },
             )
         }
+    }
+}
+
+private fun sampleSubscriptionUiState(): SubscriptionUiState = SubscriptionUiState(
+    subscriptions = persistentListOf(
+        Subscription(
+            id = "sub-1",
+            name = "ATRI",
+            type = ProfileType.Url,
+            url = "https://example.com/sub",
+            upload = 31L * 1024 * 1024 * 1024,
+            download = 120L * 1024 * 1024 * 1024,
+            total = 1000L * 1024 * 1024 * 1024,
+            updatedAt = 1792575180000L,
+            isActive = true,
+            imported = true,
+        ),
+        Subscription(
+            id = "sub-2",
+            name = "Backup Airport",
+            type = ProfileType.Url,
+            url = "https://example.com/backup",
+            upload = 5L * 1024 * 1024 * 1024,
+            download = 25L * 1024 * 1024 * 1024,
+            total = 200L * 1024 * 1024 * 1024,
+            updatedAt = 1792488780000L,
+            isActive = false,
+            imported = true,
+        ),
+    ),
+)
+
+@Preview(showBackground = true)
+@Composable
+private fun SubscriptionScreenPreview() {
+    MiuixTheme {
+        SubscriptionScreenContent(uiState = sampleSubscriptionUiState())
+    }
+}
+
+@Preview(showBackground = true, widthDp = 1280, heightDp = 800)
+@Composable
+private fun SubscriptionScreenTabletPreview() {
+    MiuixTheme {
+        SubscriptionScreenContent(uiState = sampleSubscriptionUiState())
     }
 }

@@ -12,8 +12,10 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Wifi
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.clearText
+import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -52,8 +54,9 @@ import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.glass.GlassDropdownPreference
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Add
-import top.yukonga.miuix.kmp.icon.extended.Delete
+import top.yukonga.miuix.kmp.icon.glass.Add
+import top.yukonga.miuix.kmp.icon.glass.Delete
+import top.yukonga.miuix.kmp.icon.glass.WiFi
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -88,7 +91,7 @@ fun WifiPolicyScreen(
     var currentSsid by remember {
         mutableStateOf(controller?.currentSsid())
     }
-    var newSsid by remember { mutableStateOf("") }
+    val ssidState = rememberTextFieldState()
 
     val permissionRequired = stringResource(R.string.wifi_policy_permission_required)
     val ssidEmpty = stringResource(R.string.wifi_policy_ssid_empty)
@@ -165,13 +168,13 @@ fun WifiPolicyScreen(
     }
 
     fun addSsid() {
-        val value = normalizeInputSsid(newSsid)
+        val value = normalizeInputSsid(ssidState.text.toString())
         when {
             value.isEmpty() -> showToast(ssidEmpty)
             value in ssids -> showToast(ssidDuplicate)
             else -> {
                 persistSsids(ssids + value)
-                newSsid = ""
+                ssidState.clearText()
             }
         }
     }
@@ -182,7 +185,7 @@ fun WifiPolicyScreen(
             if (candidate == null) {
                 showToast(currentWifiEmpty)
             } else {
-                newSsid = candidate
+                ssidState.setTextAndPlaceCursorAtEnd(candidate)
                 refreshStatus()
             }
         }
@@ -199,8 +202,7 @@ fun WifiPolicyScreen(
     val ssidCardItems = listOf(
         CardItem("ssidInput") {
             SsidInputRow(
-                value = newSsid,
-                onValueChange = { newSsid = it },
+                state = ssidState,
                 onScan = { fillCurrentSsid() },
                 onAdd = { addSsid() },
             )
@@ -212,7 +214,8 @@ fun WifiPolicyScreen(
                 onDelete = { persistSsids(ssids - ssid) },
             )
         }
-    } + listOf(
+    }
+    val statusCardItems = listOf(
         CardItem("current") {
             ArrowPreference(
                 title = stringResource(R.string.wifi_policy_current),
@@ -324,6 +327,11 @@ fun WifiPolicyScreen(
                 groupedCardItems(
                     keyPrefix = "wifi_policy_ssids",
                     items = ssidCardItems,
+                    outerBottomPadding = 12.dp,
+                )
+                groupedCardItems(
+                    keyPrefix = "wifi_policy_status",
+                    items = statusCardItems,
                 )
                 item {
                     Spacer(
@@ -339,8 +347,7 @@ fun WifiPolicyScreen(
 
 @Composable
 private fun SsidInputRow(
-    value: String,
-    onValueChange: (String) -> Unit,
+    state: TextFieldState,
     onScan: () -> Unit,
     onAdd: () -> Unit,
 ) {
@@ -358,15 +365,14 @@ private fun SsidInputRow(
             backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
         ) {
             Icon(
-                modifier = Modifier.size(20.dp),
-                imageVector = Icons.Rounded.Wifi,
+                modifier = Modifier.size(28.dp),
+                imageVector = MiuixIcons.Glass.WiFi,
                 contentDescription = stringResource(R.string.wifi_policy_ssid_scan),
                 tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             )
         }
         TextField(
-            value = value,
-            onValueChange = onValueChange,
+            state = state,
             // 与两侧 40dp 圆形按钮等高，默认 16dp 垂直内边距会把高度撑到 ~53dp
             modifier = Modifier
                 .weight(1f)
@@ -382,8 +388,8 @@ private fun SsidInputRow(
             backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
         ) {
             Icon(
-                modifier = Modifier.size(20.dp),
-                imageVector = MiuixIcons.Add,
+                modifier = Modifier.size(28.dp),
+                imageVector = MiuixIcons.Glass.Add,
                 contentDescription = stringResource(R.string.wifi_policy_ssid_add),
                 tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             )
@@ -406,8 +412,8 @@ private fun SsidListItem(
                 backgroundColor = Color.Transparent,
             ) {
                 Icon(
-                    modifier = Modifier.size(20.dp),
-                    imageVector = MiuixIcons.Delete,
+                    modifier = Modifier.size(28.dp),
+                    imageVector = MiuixIcons.Glass.Delete,
                     contentDescription = stringResource(R.string.common_delete),
                     tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                 )
